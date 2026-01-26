@@ -17,3 +17,7 @@ TaskHandle_t xHandle_button = NULL;
 TaskHandle_t xHandle_gps = NULL;
 TaskHandle_t xHandle_sms = NULL;
 TaskHandle_t xHandle_sim7680c = NULL;
+
+void sosEnter();
+void sosExit();
+bool sosIsActive();

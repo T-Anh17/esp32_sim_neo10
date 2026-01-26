@@ -1,6 +1,29 @@
 #include "sim7680c.h"
+#include <freertos/semphr.h>
 
 HardwareSerial simSerial(2);
+static SemaphoreHandle_t simMutex = NULL;
+static const char *WEB_VIEWER_URL = "https://gps-tracker.ahcntab.workers.dev/viewer";
+
+static void lockSim()
+{
+    if (simMutex == NULL)
+    {
+        simMutex = xSemaphoreCreateMutex();
+    }
+    if (simMutex != NULL)
+    {
+        xSemaphoreTake(simMutex, portMAX_DELAY);
+    }
+}
+
+static void unlockSim()
+{
+    if (simMutex != NULL)
+    {
+        xSemaphoreGive(simMutex);
+    }
+}
 
 // ------------------------------------------------------------
 // RÚT GỌN KHỞI TẠO
@@ -9,6 +32,7 @@ void init_sim7680c()
 {
     Serial.println("[SIM7680C] Init...");
 
+    lockSim();
     simSerial.begin(MCU_SIM_BAUDRATE, SERIAL_8N1, SIM_RX_PIN, SIM_TX_PIN);
 
     // Handshake
@@ -27,6 +51,7 @@ void init_sim7680c()
     if (!ready)
     {
         Serial.println("[SIM7680C] ❌ No response!");
+        unlockSim();
         return;
     }
 
@@ -64,6 +89,7 @@ void init_sim7680c()
     }
 
     Serial.println("[SIM7680C] Init done.");
+    unlockSim();
 }
 
 // ------------------------------------------------------------
@@ -71,6 +97,7 @@ void init_sim7680c()
 // ------------------------------------------------------------
 bool sim_isRegistered()
 {
+    lockSim();
     simSerial.println("AT+CREG?");
     delay(200);
 
@@ -81,7 +108,9 @@ bool sim_isRegistered()
             r += char(simSerial.read());
 
     // Không in log – tránh spam
-    return (r.indexOf(",1") > 0 || r.indexOf(",5") > 0);
+    bool ok = (r.indexOf(",1") > 0 || r.indexOf(",5") > 0);
+    unlockSim();
+    return ok;
 }
 
 // ------------------------------------------------------------
@@ -89,10 +118,11 @@ bool sim_isRegistered()
 // ------------------------------------------------------------
 void SIM7680C_sendSMS(const String &mapLink)
 {
-    String message = String(SMS) + " - Link: " + mapLink;
+    String message = String(SMS) + " - Link: " + mapLink + " - Web: " + WEB_VIEWER_URL;
 
     Serial.println("[SIM7680C] Sending SMS...");
 
+    lockSim();
     simSerial.printf("AT+CMGS=\"%s\"\r\n", PHONE);
     delay(300);
 
@@ -108,6 +138,7 @@ void SIM7680C_sendSMS(const String &mapLink)
             Serial.write(simSerial.read());
 
     Serial.println("[SIM7680C] Done.");
+    unlockSim();
 }
 
 // ------------------------------------------------------------
@@ -116,6 +147,7 @@ void SIM7680C_sendSMS(const String &mapLink)
 void SIM7680C_call()
 {
     Serial.printf("[SIM7680C] Calling %s...\n", PHONE);
+    lockSim();
     simSerial.printf("ATD%s;\r\n", PHONE);
 
     unsigned long start = millis();
@@ -140,6 +172,7 @@ void SIM7680C_call()
             {
                 Serial.println("\n[CALL] Call ended or rejected.");
                 simSerial.println("ATH");
+                unlockSim();
                 return;
             }
         }
@@ -147,10 +180,12 @@ void SIM7680C_call()
     }
     Serial.println("[CALL] Timeout, hang up.");
     simSerial.println("ATH");
+    unlockSim();
 }
 
 void SIM7680C_httpPost(const String &url, const String &contentType, const String &body)
 {
+    lockSim();
     simSerial.println("AT+HTTPINIT");
     delay(200);
 
@@ -178,6 +213,40 @@ void SIM7680C_httpPost(const String &url, const String &contentType, const Strin
     }
 
     simSerial.println("AT+HTTPTERM");
+    unlockSim();
+}
+
+String SIM7680C_httpGet(const String &url)
+{
+    String response = "";
+    lockSim();
+    simSerial.println("AT+HTTPINIT");
+    delay(200);
+
+    simSerial.println("AT+HTTPPARA=\"CID\",1");
+    delay(100);
+
+    simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
+    delay(200);
+
+    simSerial.println("AT+HTTPACTION=0"); // GET
+    delay(3000);
+
+    simSerial.println("AT+HTTPREAD");
+    unsigned long start = millis();
+    while (millis() - start < 5000)
+    {
+        while (simSerial.available())
+        {
+            response += char(simSerial.read());
+        }
+        delay(10);
+    }
+
+    simSerial.println("AT+HTTPTERM");
+    unlockSim();
+
+    return response;
 }
 
 // ------------------------------------------------------------

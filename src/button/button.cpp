@@ -51,7 +51,9 @@ void buttonTask(void *pvParameters)
 
                     xTaskCreatePinnedToCore([](void *)
                                             {
+                                                sosEnter();
                                                 SIM7680C_call();
+                                                sosExit();
                                                 vTaskDelete(NULL); },
                                             "callTask", 4096, NULL, 1, NULL, 1);
 
@@ -79,9 +81,11 @@ void buttonTask(void *pvParameters)
 
                     xTaskCreatePinnedToCore([](void *param)
                                             {
+                                                sosEnter();
                                                 String msg = *(String *)param;
                                                 SIM7680C_sendSMS(msg);
                                                 delete (String *)param;
+                                                sosExit();
                                                 vTaskDelete(NULL); },
                                             "smsTask",
                                             4096,
