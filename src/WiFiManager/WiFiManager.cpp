@@ -35,7 +35,7 @@ void initWiFi()
     // 1️⃣ Khởi động AP
     // ==============================
     const char *AP_SSID = "ESP32-SETUP";
-    const char *AP_PASS = "123456788";
+    const char *AP_PASS = "12345678";
 
     bool ap_ok = WiFi.softAP(AP_SSID, AP_PASS);
     if (ap_ok)

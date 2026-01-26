@@ -1,7 +1,7 @@
 
 #ifdef DEV
 #define SSID_Name "ADMIN"
-#define SSID_Password "123456788"
+#define SSID_Password "12345678"
 
 #define QUOTE "\""
 #define COMMA ","
