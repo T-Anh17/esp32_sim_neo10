@@ -14,7 +14,7 @@ void buttonTask(void *pvParameters)
     // ---- double click state ----
     int clickCount = 0;
     unsigned long lastClickTime = 0;
-    const unsigned long doubleClickGap = 400; // ms
+    const unsigned long doubleClickGap = 1000; // ms
     // -----------------------------
 
     while (true)
@@ -44,16 +44,28 @@ void buttonTask(void *pvParameters)
                     lastClickTime = millis(); // chờ xem có click lần 2 không
                 }
                 else if (clickCount == 2 &&
-                         (millis() - lastClickTime) < doubleClickGap)
+                         (millis() - lastClickTime) <= doubleClickGap)
                 {
                     // ======= DOUBLE CLICK =======
-                    Serial.println("[Button] Double Click → CALLING...");
+                    Serial.println("[Button] Double Click → SEND SMS...");
 
-                    xTaskCreatePinnedToCore([](void *)
+                    String link = getGPSLink();
+                    Serial.println(link);
+
+                    xTaskCreatePinnedToCore([](void *param)
                                             {
-                                                SIM7680C_call();
+                                                sosEnter();
+                                                String msg = *(String *)param;
+                                                SIM7680C_sendSMS(msg);
+                                                delete (String *)param;
+                                                sosExit();
                                                 vTaskDelete(NULL); },
-                                            "callTask", 4096, NULL, 1, NULL, 1);
+                                            "smsTask",
+                                            4096,
+                                            new String(link),
+                                            1,
+                                            NULL,
+                                            1);
 
                     clickCount = 0;
                 }
@@ -65,47 +77,19 @@ void buttonTask(void *pvParameters)
             }
 
             // =====================================
-            // ⭐ CASE 2 — NHẤN GIỮ (1–3 giây)
+            // ⭐ CASE 2 — NHẤN GIỮ > 1 giây
             // =====================================
-            if (pressDuration >= 1000 && pressDuration <= 3000)
+            if (pressDuration >= 1000)
             {
                 // Đảm bảo KHÔNG xử lý nếu trước đó đã tính là click
                 if (clickCount == 0)
                 {
-                    Serial.println("[Button] Press 1–3s → Send SMS");
-
-                    String link = getGPSLink();
-                    Serial.println(link);
-
-                    xTaskCreatePinnedToCore([](void *param)
-                                            {
-                                                String msg = *(String *)param;
-                                                SIM7680C_sendSMS(msg);
-                                                delete (String *)param;
-                                                vTaskDelete(NULL); },
-                                            "smsTask",
-                                            4096,
-                                            new String(link),
-                                            1,
-                                            NULL,
-                                            1);
-
-                    buzzer_beep(200, 1, 100);
-                }
-            }
-
-            // =====================================
-            // ⭐ CASE 3 — NHẤN GIỮ >3 GIÂY
-            // =====================================
-            if (pressDuration > 3000)
-            {
-                if (clickCount == 0)
-                {
+                    Serial.println("[Button] Press >1s → BUZZER");
                     buzzerActive = !buzzerActive;
 
                     if (buzzerActive)
                     {
-                        Serial.println("[Button] Long Press >3s → SOS ON");
+                        Serial.println("[Button] SOS ON");
 
                         xTaskCreatePinnedToCore([](void *)
                                                 {
