@@ -45,7 +45,8 @@ void Tracking_Loop()
     String json = "{";
     json += "\"id\":\"" + String(DEVICE_ID) + "\",";
     json += "\"lat\":" + String(lat, 6) + ",";
-    json += "\"lng\":" + String(lng, 6);
+    json += "\"lng\":" + String(lng, 6) + ",";
+    json += "\"fix\":true";
     json += "}";
 
     Serial.println("[TRACKING] SEND JSON = " + json);

@@ -47,7 +47,7 @@ void buttonTask(void *pvParameters)
                          (millis() - lastClickTime) <= doubleClickGap)
                 {
                     // ======= DOUBLE CLICK =======
-                    Serial.println("[Button] Double Click → SEND SMS...");
+                    Serial.println("[Button] Double Click → SEND SMS + CALL...");
 
                     String link = getGPSLink();
                     Serial.println(link);
@@ -57,10 +57,11 @@ void buttonTask(void *pvParameters)
                                                 sosEnter();
                                                 String msg = *(String *)param;
                                                 SIM7680C_sendSMS(msg);
+                                                SIM7680C_call();
                                                 delete (String *)param;
                                                 sosExit();
                                                 vTaskDelete(NULL); },
-                                            "smsTask",
+                                            "sosTask",
                                             4096,
                                             new String(link),
                                             1,

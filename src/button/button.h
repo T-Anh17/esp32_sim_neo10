@@ -17,4 +17,6 @@ struct SmsData
 extern QueueHandle_t smsQueue;
 void buttonTask(void *para);
 void smsTask(void *pvParameters);
+void sosEnter();
+void sosExit();
 #endif

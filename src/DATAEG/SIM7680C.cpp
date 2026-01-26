@@ -3,7 +3,7 @@
 
 HardwareSerial simSerial(2);
 static SemaphoreHandle_t simMutex = NULL;
-static const char *WEB_VIEWER_URL = "https://gps-tracker.ahcntab.workers.dev/viewer";
+static const char *WEB_VIEWER_URL = "https://gps-tracker.ahcntab.workers.dev/viewer?id=TRACKER_001";
 
 static void lockSim()
 {
