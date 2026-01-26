@@ -19,3 +19,4 @@ bool waitOK(uint32_t timeout);
 void SIM7680C_httpPost(const String &url, const String &contentType, const String &body);
 void SIM7680C_mqttSend(const String &payload);
 String readAll(uint32_t timeout);
+String SIM7680C_httpGet(const String &url);

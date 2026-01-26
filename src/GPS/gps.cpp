@@ -165,57 +165,50 @@ void gpsTask(void *pvParameters)
     // ============================================================
     bool hasAGPS = false;
 
-    if (WiFi.status() == WL_CONNECTED)
+    Serial.println("[AssistNow] Downloading...");
+
+    const int MAX_RETRY = 3;
+    bool ok = false;
+
+    for (int i = 1; i <= MAX_RETRY; i++)
     {
-        Serial.println("[AssistNow] Downloading...");
+        Serial.printf("[AssistNow] Try %d/%d...\n", i, MAX_RETRY);
 
-        const int MAX_RETRY = 3;
-        bool ok = false;
-
-        for (int i = 1; i <= MAX_RETRY; i++)
+        if (downloadAssistNow()) // return true nếu load OK
         {
-            Serial.printf("[AssistNow] Try %d/%d...\n", i, MAX_RETRY);
-
-            if (downloadAssistNow()) // return true nếu load OK
-            {
-                Serial.println("[AssistNow] Download OK");
-                ok = true;
-                break;
-            }
-
-            Serial.println("[AssistNow] Download FAILED");
-            vTaskDelay(pdMS_TO_TICKS(300)); // đợi 300ms rồi thử lại
+            Serial.println("[AssistNow] Download OK");
+            ok = true;
+            break;
         }
 
-        if (ok)
+        Serial.println("[AssistNow] Download FAILED");
+        vTaskDelay(pdMS_TO_TICKS(300)); // đợi 300ms rồi thử lại
+    }
+
+    if (ok)
+    {
+        // ========================================================
+        // 2) INJECT A-GPS
+        // ========================================================
+        Serial.println("[AssistNow] Injecting...");
+
+        if (injectAssistNow(SerialGPS))
         {
-            // ========================================================
-            // 2) INJECT A-GPS
-            // ========================================================
-            Serial.println("[AssistNow] Injecting...");
+            Serial.println("[AssistNow] Inject OK");
+            hasAGPS = true;
 
-            if (injectAssistNow(SerialGPS))
-            {
-                Serial.println("[AssistNow] Inject OK");
-                hasAGPS = true;
-
-                // Reset nóng sau inject
-                sendUBX(CFG_RESET_HOT, sizeof(CFG_RESET_HOT));
-                vTaskDelay(300);
-            }
-            else
-            {
-                Serial.println("[AssistNow] Inject FAILED");
-            }
+            // Reset nóng sau inject
+            sendUBX(CFG_RESET_HOT, sizeof(CFG_RESET_HOT));
+            vTaskDelay(300);
         }
         else
         {
-            Serial.println("[AssistNow] All retry FAILED → dùng cấu hình mặc định");
+            Serial.println("[AssistNow] Inject FAILED");
         }
     }
     else
     {
-        Serial.println("[AssistNow] No network → dùng cấu hình mặc định");
+        Serial.println("[AssistNow] All retry FAILED → dùng cấu hình mặc định");
     }
 
     // ============================================================
