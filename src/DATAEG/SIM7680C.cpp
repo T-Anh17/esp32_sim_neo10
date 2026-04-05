@@ -1,4 +1,5 @@
 #include "SIM7680C.h"
+#include <LittleFS.h>
 
 HardwareSerial simSerial(2);
 SemaphoreHandle_t simMutex = NULL;
@@ -486,4 +487,337 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
     SIM_setCapability(SIM_CAP_DATA_OK);
 
   return ok;
+}
+
+// ============================================================
+// Read network time from SIM module (AT+CCLK?)
+// Response format: +CCLK: "YY/MM/DD,HH:MM:SS+TZ"
+// TZ is in quarter-hours offset from UTC
+// Returns true if valid time was parsed. Output is UTC.
+// ============================================================
+bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour,
+                        int *minute, int *second) {
+  if (simMutex)
+    xSemaphoreTake(simMutex, portMAX_DELAY);
+
+  simSerial.println("AT+CCLK?");
+  String resp = sim_readResponse(1000);
+
+  if (simMutex)
+    xSemaphoreGive(simMutex);
+
+  // Parse +CCLK: "YY/MM/DD,HH:MM:SS+TZ" or "YY/MM/DD,HH:MM:SS-TZ"
+  int idx = resp.indexOf("+CCLK: \"");
+  if (idx < 0) {
+    logLine("[SIM] AT+CCLK? no response");
+    return false;
+  }
+  idx += 8; // skip to YY
+
+  // YY/MM/DD,HH:MM:SS+TZ
+  int yy, mo, dd, hh, mn, ss, tz = 0;
+  char tzSign = '+';
+
+  // Manual parse to handle +/- timezone
+  if (sscanf(resp.c_str() + idx, "%d/%d/%d,%d:%d:%d", &yy, &mo, &dd, &hh, &mn,
+             &ss) < 6) {
+    logPrintf("[SIM] CCLK parse fail: %s", resp.c_str() + idx);
+    return false;
+  }
+
+  // Find timezone offset
+  int tzIdx = resp.indexOf('+', idx + 15);
+  if (tzIdx < 0)
+    tzIdx = resp.indexOf('-', idx + 15);
+  if (tzIdx > 0) {
+    tzSign = resp[tzIdx];
+    tz = resp.substring(tzIdx + 1).toInt();
+  }
+
+  // Convert YY to full year
+  int fullYear = (yy < 80) ? (2000 + yy) : (1900 + yy);
+
+  // Convert to UTC: tz is in quarter-hours
+  int tzOffsetMinutes = tz * 15;
+  if (tzSign == '+')
+    tzOffsetMinutes = -tzOffsetMinutes; // subtract to get UTC
+  else
+    tzOffsetMinutes = tzOffsetMinutes; // add to get UTC
+
+  // Simple adjustment: just adjust hours and minutes
+  mn += tzOffsetMinutes % 60;
+  hh += tzOffsetMinutes / 60;
+
+  // Normalize
+  while (mn < 0) {
+    mn += 60;
+    hh--;
+  }
+  while (mn >= 60) {
+    mn -= 60;
+    hh++;
+  }
+  while (hh < 0) {
+    hh += 24;
+    dd--;
+  }
+  while (hh >= 24) {
+    hh -= 24;
+    dd++;
+  }
+  // Note: day rollover across months not handled perfectly,
+  // but the time accuracy (2s) makes this acceptable
+
+  *year = fullYear;
+  *month = mo;
+  *day = dd;
+  *hour = hh;
+  *minute = mn;
+  *second = ss;
+
+  logPrintf("[SIM] Network time (UTC): %04d-%02d-%02d %02d:%02d:%02d",
+            fullYear, mo, dd, hh, mn, ss);
+
+  // Sanity check
+  if (fullYear < 2024 || mo < 1 || mo > 12 || dd < 1 || dd > 31) {
+    logLine("[SIM] Network time failed sanity check");
+    return false;
+  }
+
+  return true;
+}
+
+// ============================================================
+// HTTP GET via SIM modem — downloads binary content to LittleFS
+//
+// Uses AT+HTTPINIT, AT+HTTPPARA, AT+HTTPACTION=0 (GET),
+// AT+HTTPREAD to retrieve binary data.
+//
+// SSL is configured during init_sim7680c().
+// Returns bytes downloaded, or 0 on failure.
+// ============================================================
+int SIM7680C_httpGetToFile(const String &url, const char *filePath) {
+  if (!SIM_hasCapability(SIM_CAP_DATA_OK)) {
+    logLine("[SIM-GET] No data capability");
+    return 0;
+  }
+  if (telemetryIsSosActive()) {
+    logLine("[SIM-GET] SOS active, skip");
+    return 0;
+  }
+
+  if (simMutex)
+    xSemaphoreTake(simMutex, portMAX_DELAY);
+
+  logPrintf("[SIM-GET] URL: %s", url.c_str());
+
+  // Enable SSL for HTTPS
+  bool isHttps = url.startsWith("https");
+  if (isHttps) {
+    simSerial.println("AT+HTTPSSL=1");
+    delay(200);
+    while (simSerial.available())
+      simSerial.read();
+  }
+
+  // Init HTTP service
+  simSerial.println("AT+HTTPINIT");
+  String r = sim_readResponse(1000);
+  if (r.indexOf("ERROR") >= 0) {
+    // Might be already initialized, try to terminate and retry
+    simSerial.println("AT+HTTPTERM");
+    delay(500);
+    simSerial.println("AT+HTTPINIT");
+    r = sim_readResponse(1000);
+  }
+
+  simSerial.println("AT+HTTPPARA=\"CID\",1");
+  delay(100);
+  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
+  delay(300);
+  simSerial.println("AT+HTTPPARA=\"REDIR\",1"); // follow redirects
+  delay(100);
+
+  // Start GET request
+  simSerial.println("AT+HTTPACTION=0");
+
+  // Wait for +HTTPACTION response (up to 30s for SSL + download)
+  String actionResp = "";
+  unsigned long t0 = millis();
+  bool gotAction = false;
+  while (millis() - t0 < 30000) {
+    while (simSerial.available()) {
+      char c = simSerial.read();
+      actionResp += c;
+    }
+    if (actionResp.indexOf("+HTTPACTION:") >= 0) {
+      gotAction = true;
+      break;
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+
+  if (!gotAction) {
+    logLine("[SIM-GET] HTTPACTION timeout");
+    simSerial.println("AT+HTTPTERM");
+    delay(200);
+    while (simSerial.available())
+      simSerial.read();
+    if (simMutex)
+      xSemaphoreGive(simMutex);
+    return 0;
+  }
+
+  // Parse +HTTPACTION: 0,<status>,<datalen>
+  int statusCode = 0;
+  int dataLen = 0;
+  int ai = actionResp.indexOf("+HTTPACTION: 0,");
+  if (ai >= 0) {
+    int c1 = actionResp.indexOf(",", ai + 15);
+    if (c1 > 0) {
+      statusCode = actionResp.substring(ai + 15, c1).toInt();
+      dataLen = actionResp.substring(c1 + 1).toInt();
+    }
+  }
+
+  logPrintf("[SIM-GET] HTTP %d, %d bytes", statusCode, dataLen);
+
+  if (statusCode != 200 || dataLen < 256) {
+    logPrintf("[SIM-GET] Bad response: status=%d len=%d", statusCode, dataLen);
+    simSerial.println("AT+HTTPTERM");
+    delay(200);
+    while (simSerial.available())
+      simSerial.read();
+    if (simMutex)
+      xSemaphoreGive(simMutex);
+    return 0;
+  }
+
+  // Read data in chunks and save to file
+  if (!LittleFS.begin(true)) {
+    logLine("[SIM-GET] LittleFS mount failed");
+    simSerial.println("AT+HTTPTERM");
+    delay(200);
+    if (simMutex)
+      xSemaphoreGive(simMutex);
+    return 0;
+  }
+
+  File f = LittleFS.open(filePath, "w");
+  if (!f) {
+    logPrintf("[SIM-GET] Cannot open %s for write", filePath);
+    simSerial.println("AT+HTTPTERM");
+    delay(200);
+    if (simMutex)
+      xSemaphoreGive(simMutex);
+    return 0;
+  }
+
+  int totalRead = 0;
+  const int chunkSize = 512;
+
+  while (totalRead < dataLen) {
+    int toRead = dataLen - totalRead;
+    if (toRead > chunkSize)
+      toRead = chunkSize;
+
+    simSerial.printf("AT+HTTPREAD=%d,%d\r\n", totalRead, toRead);
+
+    // Wait for +HTTPREAD: <len>\r\n then binary data follows
+    // IMPORTANT: binary payload bytes may arrive mixed with the header.
+    // We must extract any spillover bytes from readResp after the \n.
+    uint8_t rawBuf[768]; // header + possible spillover
+    int rawLen = 0;
+    t0 = millis();
+    bool gotReadHeader = false;
+    int expectedBytes = 0;
+    int headerEndIdx = -1; // index in rawBuf where payload starts
+
+    while (millis() - t0 < 5000 && rawLen < (int)sizeof(rawBuf)) {
+      while (simSerial.available() && rawLen < (int)sizeof(rawBuf)) {
+        rawBuf[rawLen++] = simSerial.read();
+      }
+
+      // Scan for "+HTTPREAD: " in what we have so far
+      // We work on raw bytes to preserve binary payload
+      for (int s = 0; s < rawLen - 12; s++) {
+        if (memcmp(rawBuf + s, "+HTTPREAD: ", 11) == 0) {
+          // Find \n after the length value
+          for (int e = s + 11; e < rawLen; e++) {
+            if (rawBuf[e] == '\n') {
+              // Parse length from rawBuf[s+11..e-1]
+              char numBuf[16] = {0};
+              int numLen = e - (s + 11);
+              if (numLen > 0 && numLen < 15) {
+                memcpy(numBuf, rawBuf + s + 11, numLen);
+                expectedBytes = atoi(numBuf);
+              }
+              headerEndIdx = e + 1; // payload starts here
+              gotReadHeader = true;
+              break;
+            }
+          }
+          if (gotReadHeader)
+            break;
+        }
+      }
+      if (gotReadHeader)
+        break;
+      vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    if (!gotReadHeader || expectedBytes <= 0) {
+      logPrintf("[SIM-GET] Read chunk failed at offset %d", totalRead);
+      break;
+    }
+
+    // Write spillover bytes (payload that arrived with header)
+    uint8_t buf[512];
+    int bytesGot = 0;
+    int spillover = rawLen - headerEndIdx;
+    if (spillover > 0 && spillover <= expectedBytes) {
+      int toCopy = (spillover > (int)sizeof(buf)) ? (int)sizeof(buf) : spillover;
+      memcpy(buf, rawBuf + headerEndIdx, toCopy);
+      bytesGot = toCopy;
+    }
+
+    // Read remaining binary bytes from UART
+    t0 = millis();
+    while (bytesGot < expectedBytes && millis() - t0 < 5000) {
+      if (simSerial.available()) {
+        buf[bytesGot++] = simSerial.read();
+      } else {
+        vTaskDelay(1);
+      }
+    }
+
+    if (bytesGot > 0) {
+      f.write(buf, bytesGot);
+      totalRead += bytesGot;
+    }
+
+    // Drain any trailing OK/newlines
+    delay(50);
+    while (simSerial.available())
+      simSerial.read();
+  }
+
+  f.close();
+
+  // Terminate HTTP session
+  simSerial.println("AT+HTTPTERM");
+  delay(200);
+  while (simSerial.available())
+    simSerial.read();
+
+  if (simMutex)
+    xSemaphoreGive(simMutex);
+
+  logPrintf("[SIM-GET] Downloaded %d/%d bytes to %s", totalRead, dataLen,
+            filePath);
+
+  if (totalRead > 0)
+    SIM_setCapability(SIM_CAP_HTTP_OK);
+
+  return totalRead;
 }

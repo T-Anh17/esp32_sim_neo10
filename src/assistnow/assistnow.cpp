@@ -1,5 +1,6 @@
 #include "assistnow.h"
 #include "Config.h"
+#include "DATAEG/SIM7680C.h"
 #include <HTTPClient.h>
 #include <LittleFS.h>
 #include <WiFi.h>
@@ -363,10 +364,83 @@ bool injectAssistNow(HardwareSerial &gpsSerial) {
   if (totalBytes > 0) {
     // Set status: keep download_ok/cache_fresh if already set
       if (strcmp(ASSIST_STATUS, "download_ok") != 0 &&
+          strcmp(ASSIST_STATUS, "download_sim_ok") != 0 &&
           strcmp(ASSIST_STATUS, "cache_fresh") != 0) {
         telemetrySetAssistStatus("cached_injected");
       }
     return true;
   }
+  return false;
+}
+
+// ============================================================
+// Download AssistNow via SIM modem (cellular HTTP GET)
+//
+// Same URL strategy as WiFi version but uses SIM7680C_httpGetToFile().
+// Only tries if SIM has data capability.
+// ============================================================
+bool downloadAssistNowViaSIM() {
+  if (!ensureFS())
+    return false;
+
+  // Fresh cache → skip
+  if (isCacheFresh() && validateUBXFile()) {
+    Serial.println("[ASSIST-SIM] Cache fresh + valid, skip");
+    telemetrySetAssistStatus("cache_fresh");
+    return true;
+  }
+
+  if (!SIM_hasCapability(SIM_CAP_DATA_OK)) {
+    Serial.println("[ASSIST-SIM] No SIM data capability");
+    return false;
+  }
+
+  bool hasToken = (strlen(ASSIST_TOKEN) > 5);
+  bool hasChipcode = (strlen(ASSIST_CHIPCODE) > 5);
+
+  if (!hasToken && !hasChipcode) {
+    Serial.println("[ASSIST-SIM] No credentials");
+    telemetrySetAssistStatus("no_credentials");
+    return false;
+  }
+
+  String urls[4];
+  int urlCount = 0;
+
+  // TOKEN endpoints
+  if (hasToken) {
+    urls[urlCount++] =
+        "https://online-live1.services.u-blox.com/GetOnlineData.ashx"
+        "?token=" +
+        String(ASSIST_TOKEN) + "&gnss=gps,gal&datatype=eph,alm,aux";
+    urls[urlCount++] =
+        "https://online-live2.services.u-blox.com/GetOnlineData.ashx"
+        "?token=" +
+        String(ASSIST_TOKEN) + "&gnss=gps,gal&datatype=eph,alm,aux";
+  }
+
+  // CHIPCODE endpoint
+  if (hasChipcode) {
+    urls[urlCount++] =
+        "https://assistnow.services.u-blox.com/GetAssistNowData.ashx"
+        "?chipcode=" +
+        String(ASSIST_CHIPCODE) + "&gnss=gps,gal&data=uporb_1,ualm";
+  }
+
+  Serial.printf("[ASSIST-SIM] %d URL(s) to try\n", urlCount);
+
+  for (int i = 0; i < urlCount; i++) {
+    Serial.printf("[ASSIST-SIM] Attempt %d/%d\n", i + 1, urlCount);
+    int bytes = SIM7680C_httpGetToFile(urls[i], FILE_UBX);
+    if (bytes > 0 && validateUBXFile()) {
+      saveCacheTimestamp();
+      Serial.printf("[ASSIST-SIM] OK: %d bytes\n", bytes);
+      telemetrySetAssistStatus("download_sim_ok");
+      return true;
+    }
+  }
+
+  Serial.println("[ASSIST-SIM] All SIM downloads failed");
+  telemetrySetAssistStatus("download_sim_fail");
   return false;
 }
