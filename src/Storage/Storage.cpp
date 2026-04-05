@@ -120,6 +120,11 @@ void loadDataFromRom() {
   // SIM tracking
   nvsReadBool("SIM_TRK", &cfg.simTrackingEnable, true);
 
+  // Network location
+  nvsReadBool("NLOC_EN", &cfg.netlocEnable, true);
+  nvsReadStr("NLOC_KEY", cfg.netlocApiKey, sizeof(cfg.netlocApiKey), "pk.aae008bb12d51de2ae1af94369c73b14");
+  nvsReadStr("NLOC_PRV", cfg.netlocProvider, sizeof(cfg.netlocProvider), "unwiredlabs");
+
   applyConfigSnapshot(&cfg);
 
   logPrintf("[STORAGE] C1=%s C2=%s C3=%s HOT=%s", cfg.call1, cfg.call2,
@@ -152,6 +157,10 @@ void saveAllConfig() {
   nvs_set_str(nvsHandle, "CHIPCODE", cfg.assistChipcode);
   nvs_set_str(nvsHandle, "ASST_TOK", cfg.assistToken);
   nvs_set_u8(nvsHandle, "SIM_TRK", cfg.simTrackingEnable ? 1 : 0);
+
+  nvs_set_u8(nvsHandle, "NLOC_EN", cfg.netlocEnable ? 1 : 0);
+  nvs_set_str(nvsHandle, "NLOC_KEY", cfg.netlocApiKey);
+  nvs_set_str(nvsHandle, "NLOC_PRV", cfg.netlocProvider);
 
   nvs_commit(nvsHandle);
   logLine("[STORAGE] Saved");

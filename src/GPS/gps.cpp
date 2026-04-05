@@ -509,6 +509,11 @@ void gpsTask(void *pvParameters) {
       lastLat = currentLat;
       lastLng = currentLng;
 
+      // Keep global GPS_LAT/GPS_LNG in sync for getBestAvailableLocation()
+      GPS_LAT = currentLat;
+      GPS_LNG = currentLng;
+      telemetrySetLastGpsUpdate();
+
       TelemetrySnapshot telem = {};
       getTelemetrySnapshot(&telem);
       if (!telem.gpsReady) {
@@ -533,17 +538,23 @@ void gpsTask(void *pvParameters) {
 // ---------------------- GET GPS LINK -----------------------
 String getGPSLink() {
   char buffer[100];
-  if (currentLat == 0 || currentLng == 0) {
+  BestLocationResult loc = getBestAvailableLocation();
+  if (loc.valid) {
+    sprintf(buffer, "https://www.google.com/maps?q=%.6f,%.6f", loc.lat,
+            loc.lng);
+    if (loc.source == LOC_GPS) {
+      GPS_LAT = loc.lat;
+      GPS_LNG = loc.lng;
+    }
+  } else {
     double lat = atof(GPS_LOCAL_LAT);
     double lng = atof(GPS_LOCAL_LNG);
     sprintf(buffer, "https://www.google.com/maps?q=%.6f,%.6f", lat, lng);
     GPS_LAT = lat;
     GPS_LNG = lng;
-  } else {
-    sprintf(buffer, "https://www.google.com/maps?q=%.6f,%.6f", currentLat,
-            currentLng);
-    GPS_LAT = currentLat;
-    GPS_LNG = currentLng;
+  }
+
+  if (loc.valid && loc.source == LOC_GPS) {
     nvs_set_blob(nvsHandle, "GPS_LAT", &GPS_LAT, sizeof(GPS_LAT));
     nvs_set_blob(nvsHandle, "GPS_LNG", &GPS_LNG, sizeof(GPS_LNG));
     nvs_commit(nvsHandle);

@@ -244,6 +244,83 @@ int sim_getSignalLevel() {
 }
 
 // ============================================================
+// Get Cell Info (MCC, MNC, LAC, CellID, Radio) via AT+CPSI?
+// ============================================================
+bool SIM_getCellInfo(int *mcc, int *mnc, int *lac, int *cellId, String *radio) {
+  if (simMutex)
+    xSemaphoreTake(simMutex, portMAX_DELAY);
+  simSerial.println("AT+CPSI?");
+  String r = sim_readResponse(500);
+  if (simMutex)
+    xSemaphoreGive(simMutex);
+
+  int idx = r.indexOf("+CPSI: ");
+  if (idx < 0)
+    return false;
+  idx += 7;
+
+  int p1 = r.indexOf(',', idx);
+  if (p1 < 0)
+    return false;
+  String sysMode = r.substring(idx, p1);
+  if (sysMode.indexOf("NO SERVICE") >= 0)
+    return false;
+
+  int p2 = r.indexOf(',', p1 + 1);
+  if (p2 < 0)
+    return false;
+
+  int p3 = r.indexOf(',', p2 + 1);
+  if (p3 < 0)
+    return false;
+  String mccMnc = r.substring(p2 + 1, p3);
+
+  int p4 = r.indexOf(',', p3 + 1);
+  if (p4 < 0)
+    return false;
+  String lacStr = r.substring(p3 + 1, p4);
+
+  int p5 = r.indexOf(',', p4 + 1);
+  if (p5 < 0)
+    p5 = r.length();
+  String cellIdStr = r.substring(p4 + 1, p5);
+
+  if (mcc && mnc) {
+    int dash = mccMnc.indexOf('-');
+    if (dash > 0) {
+      *mcc = mccMnc.substring(0, dash).toInt();
+      *mnc = mccMnc.substring(dash + 1).toInt();
+    }
+  }
+
+  if (lac) {
+    if (lacStr.startsWith("0x") || lacStr.startsWith("0X"))
+      *lac = strtol(lacStr.c_str() + 2, NULL, 16);
+    else
+      *lac = lacStr.toInt();
+  }
+
+  if (cellId) {
+    if (cellIdStr.startsWith("0x") || cellIdStr.startsWith("0X"))
+      *cellId = strtol(cellIdStr.c_str() + 2, NULL, 16);
+    else
+      *cellId = cellIdStr.toInt();
+  }
+
+  if (radio) {
+    if (sysMode.indexOf("LTE") >= 0)
+      *radio = "lte";
+    else if (sysMode.indexOf("GSM") >= 0)
+      *radio = "gsm";
+    else if (sysMode.indexOf("WCDMA") >= 0)
+      *radio = "umts";
+    else
+      *radio = "gsm";
+  }
+  return true;
+}
+
+// ============================================================
 // Send SMS to a specific number
 // ============================================================
 void SIM7680C_sendSMS_to(const char *number, const String &message) {
@@ -375,8 +452,8 @@ bool SIM7680C_callNumber(const char *number, int ringSeconds) {
       if (res.indexOf("NO CARRIER") >= 0 || res.indexOf("BUSY") >= 0 ||
           res.indexOf("NO ANSWER") >= 0 || res.indexOf("ERROR") >= 0 ||
           res.indexOf("VOICE CALL: END") >= 0) {
-          logLine("[CALL] Not answered / rejected");
-          goto cleanup;
+        logLine("[CALL] Not answered / rejected");
+        goto cleanup;
       }
     }
     vTaskDelay(pdMS_TO_TICKS(50));
@@ -427,6 +504,97 @@ void SIM7680C_callCascade() {
     delay(2000); // brief pause between attempts
   }
   logLine("[CALL] Cascade exhausted, nobody answered");
+}
+
+// ============================================================
+// HTTP POST via modem returning the response body
+// ============================================================
+bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
+                                   const String &body, String &outResponse) {
+  outResponse = "";
+  if (!SIM_hasCapability(SIM_CAP_DATA_OK) && !sim_detectDataSession())
+    return false;
+  if (telemetryIsSosActive())
+    return false;
+
+  bool isHttps = url.startsWith("https");
+
+  if (simMutex)
+    xSemaphoreTake(simMutex, portMAX_DELAY);
+
+  if (isHttps) {
+    simSerial.println("AT+HTTPSSL=1");
+    delay(200);
+    while (simSerial.available())
+      simSerial.read();
+  }
+
+  simSerial.println("AT+HTTPINIT");
+  delay(200);
+  simSerial.println("AT+HTTPPARA=\"CID\",1");
+  delay(100);
+  simSerial.printf("AT+HTTPPARA=\"URL\",\"%s\"\r\n", url.c_str());
+  delay(200);
+  simSerial.printf("AT+HTTPPARA=\"CONTENT\",\"%s\"\r\n", contentType.c_str());
+  delay(200);
+
+  simSerial.printf("AT+HTTPDATA=%d,5000\r\n", body.length());
+  delay(300);
+  simSerial.print(body);
+  delay(300);
+
+  simSerial.println("AT+HTTPACTION=1");
+
+  String actionResp = sim_readResponse(8000);
+  bool ok = false;
+  int dataLen = 0;
+
+  int si = actionResp.indexOf("+HTTPACTION: 1,");
+  if (si != -1) {
+    int ci = actionResp.indexOf(",", si + 15);
+    if (ci != -1) {
+      String st = actionResp.substring(si + 15, ci);
+      int statusCode = st.toInt();
+      logPrintf("[SIM7680C] HTTP Status: %s", st.c_str());
+      ok = (statusCode >= 200 && statusCode < 300);
+
+      int ci2 = actionResp.indexOf("\r\n", ci + 1);
+      if (ci2 == -1) ci2 = actionResp.length();
+      dataLen = actionResp.substring(ci + 1, ci2).toInt();
+    }
+  }
+
+  if (ok && dataLen > 0) {
+    simSerial.printf("AT+HTTPREAD=0,%d\r\n", dataLen);
+    String readResp = sim_readResponse(2000 + dataLen);
+
+    // Parse:
+    // +HTTPREAD: <len>\r\n
+    // <payload>\r\n
+    // OK
+    int hreadIdx = readResp.indexOf("+HTTPREAD: ");
+    if (hreadIdx >= 0) {
+      int nlIdx = readResp.indexOf("\r\n", hreadIdx);
+      if (nlIdx > 0) {
+        int endIdx = readResp.lastIndexOf("\r\nOK");
+        if (endIdx > nlIdx) {
+          outResponse = readResp.substring(nlIdx + 2, endIdx);
+        } else {
+          outResponse = readResp.substring(nlIdx + 2);
+        }
+      }
+    }
+  }
+
+  simSerial.println("AT+HTTPTERM");
+  delay(200);
+  while (simSerial.available())
+    simSerial.read();
+
+  if (simMutex)
+    xSemaphoreGive(simMutex);
+
+  return ok;
 }
 
 // ============================================================
@@ -495,8 +663,8 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
 // TZ is in quarter-hours offset from UTC
 // Returns true if valid time was parsed. Output is UTC.
 // ============================================================
-bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour,
-                        int *minute, int *second) {
+bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour, int *minute,
+                        int *second) {
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
@@ -575,8 +743,8 @@ bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour,
   *minute = mn;
   *second = ss;
 
-  logPrintf("[SIM] Network time (UTC): %04d-%02d-%02d %02d:%02d:%02d",
-            fullYear, mo, dd, hh, mn, ss);
+  logPrintf("[SIM] Network time (UTC): %04d-%02d-%02d %02d:%02d:%02d", fullYear,
+            mo, dd, hh, mn, ss);
 
   // Sanity check
   if (fullYear < 2024 || mo < 1 || mo > 12 || dd < 1 || dd > 31) {
@@ -776,7 +944,8 @@ int SIM7680C_httpGetToFile(const String &url, const char *filePath) {
     int bytesGot = 0;
     int spillover = rawLen - headerEndIdx;
     if (spillover > 0 && spillover <= expectedBytes) {
-      int toCopy = (spillover > (int)sizeof(buf)) ? (int)sizeof(buf) : spillover;
+      int toCopy =
+          (spillover > (int)sizeof(buf)) ? (int)sizeof(buf) : spillover;
       memcpy(buf, rawBuf + headerEndIdx, toCopy);
       bytesGot = toCopy;
     }

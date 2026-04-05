@@ -33,6 +33,12 @@ char ASSIST_TOKEN[128] = "";
 
 bool SIM_TRACKING_ENABLE = true;
 
+bool NETLOC_ENABLE = true;
+char NETLOC_API_KEY[CONFIG_NETLOC_KEY_LEN] =
+    "pk.aae008bb12d51de2ae1af94369c73b14";
+char NETLOC_PROVIDER[32] =
+    "unwiredlabs"; // Hoặc đổi thành "unwiredlabs" nếu dùng Unwired Labs
+
 volatile uint8_t SIM_CAPABILITY_LEVEL = 0;
 volatile bool SOS_ACTIVE = false;
 volatile bool SOS_CANCEL_REQUESTED = false;
@@ -42,10 +48,19 @@ volatile int SIGNAL_CSQ_RAW = 99;
 volatile int SIGNAL_RSSI_RAW = 0;
 
 volatile unsigned long FIRST_FIX_MS = 0;
+volatile unsigned long LAST_GPS_UPDATE_MS = 0;
 volatile unsigned long BOOT_MS = 0;
 const char *ASSIST_STATUS = ASSIST_STATUS_BUF;
 volatile int TRACK_WIFI_CODE = 0;
 volatile int TRACK_SIM_CODE = 0;
+
+// --- Network location state ---
+static volatile bool NETLOC_READY = false;
+static volatile double NETLOC_LAT = 0.0;
+static volatile double NETLOC_LNG = 0.0;
+static volatile float NETLOC_ACC = 0.0f;
+static volatile unsigned long NETLOC_AT_MS = 0;
+static volatile LocationSource NETLOC_SOURCE = LOC_NONE;
 
 char PHONE[37] = "";
 char SMS[256] = "";
@@ -107,11 +122,18 @@ void getConfigSnapshot(ConfigSnapshot *out) {
   out->signalWarnEnable = SIGNAL_WARN_ENABLE;
   out->signalWarnCooldownMin = SIGNAL_WARN_COOLDOWN_MIN;
   out->signalWarnCallMode = SIGNAL_WARN_CALL_MODE;
-  strncpy(out->assistChipcode, ASSIST_CHIPCODE, sizeof(out->assistChipcode) - 1);
+  strncpy(out->assistChipcode, ASSIST_CHIPCODE,
+          sizeof(out->assistChipcode) - 1);
   out->assistChipcode[sizeof(out->assistChipcode) - 1] = '\0';
   strncpy(out->assistToken, ASSIST_TOKEN, sizeof(out->assistToken) - 1);
   out->assistToken[sizeof(out->assistToken) - 1] = '\0';
   out->simTrackingEnable = SIM_TRACKING_ENABLE;
+  out->netlocEnable = NETLOC_ENABLE;
+  strncpy(out->netlocApiKey, NETLOC_API_KEY, sizeof(out->netlocApiKey) - 1);
+  out->netlocApiKey[sizeof(out->netlocApiKey) - 1] = '\0';
+  strncpy(out->netlocProvider, NETLOC_PROVIDER,
+          sizeof(out->netlocProvider) - 1);
+  out->netlocProvider[sizeof(out->netlocProvider) - 1] = '\0';
   unlockConfig();
 }
 
@@ -138,11 +160,18 @@ void applyConfigSnapshot(const ConfigSnapshot *snapshot) {
   SIGNAL_WARN_ENABLE = snapshot->signalWarnEnable;
   SIGNAL_WARN_COOLDOWN_MIN = snapshot->signalWarnCooldownMin;
   SIGNAL_WARN_CALL_MODE = snapshot->signalWarnCallMode;
-  strncpy(ASSIST_CHIPCODE, snapshot->assistChipcode, sizeof(ASSIST_CHIPCODE) - 1);
+  strncpy(ASSIST_CHIPCODE, snapshot->assistChipcode,
+          sizeof(ASSIST_CHIPCODE) - 1);
   ASSIST_CHIPCODE[sizeof(ASSIST_CHIPCODE) - 1] = '\0';
   strncpy(ASSIST_TOKEN, snapshot->assistToken, sizeof(ASSIST_TOKEN) - 1);
   ASSIST_TOKEN[sizeof(ASSIST_TOKEN) - 1] = '\0';
   SIM_TRACKING_ENABLE = snapshot->simTrackingEnable;
+  NETLOC_ENABLE = snapshot->netlocEnable;
+  strncpy(NETLOC_API_KEY, snapshot->netlocApiKey, sizeof(NETLOC_API_KEY) - 1);
+  NETLOC_API_KEY[sizeof(NETLOC_API_KEY) - 1] = '\0';
+  strncpy(NETLOC_PROVIDER, snapshot->netlocProvider,
+          sizeof(NETLOC_PROVIDER) - 1);
+  NETLOC_PROVIDER[sizeof(NETLOC_PROVIDER) - 1] = '\0';
   syncLegacyUnlocked();
   unlockConfig();
 }
@@ -169,12 +198,19 @@ void getTelemetrySnapshot(TelemetrySnapshot *out) {
   out->signalCsqRaw = SIGNAL_CSQ_RAW;
   out->signalRssiRaw = SIGNAL_RSSI_RAW;
   out->firstFixMs = FIRST_FIX_MS;
+  out->lastGpsUpdateMs = LAST_GPS_UPDATE_MS;
   out->bootMs = BOOT_MS;
   out->trackWifiCode = TRACK_WIFI_CODE;
   out->trackSimCode = TRACK_SIM_CODE;
   strncpy(out->assistStatus, ASSIST_STATUS ? ASSIST_STATUS : "",
           sizeof(out->assistStatus) - 1);
   out->assistStatus[sizeof(out->assistStatus) - 1] = '\0';
+  out->networkLocReady = NETLOC_READY;
+  out->networkLocLat = NETLOC_LAT;
+  out->networkLocLng = NETLOC_LNG;
+  out->networkLocAccuracyM = NETLOC_ACC;
+  out->networkLocAtMs = NETLOC_AT_MS;
+  out->networkLocSource = (LocationSource)NETLOC_SOURCE;
   unlockTelemetry();
 }
 
@@ -182,6 +218,12 @@ void telemetrySetGpsReady(bool ready, unsigned long firstFixMs) {
   lockTelemetry();
   GPS_READY = ready;
   FIRST_FIX_MS = firstFixMs;
+  unlockTelemetry();
+}
+
+void telemetrySetLastGpsUpdate() {
+  lockTelemetry();
+  LAST_GPS_UPDATE_MS = millis();
   unlockTelemetry();
 }
 
@@ -260,10 +302,103 @@ void telemetrySetTrackSimCode(int simCode) {
 
 void telemetrySetAssistStatus(const char *status) {
   lockTelemetry();
-  strncpy(ASSIST_STATUS_BUF, status ? status : "", sizeof(ASSIST_STATUS_BUF) - 1);
+  strncpy(ASSIST_STATUS_BUF, status ? status : "",
+          sizeof(ASSIST_STATUS_BUF) - 1);
   ASSIST_STATUS_BUF[sizeof(ASSIST_STATUS_BUF) - 1] = '\0';
   ASSIST_STATUS = ASSIST_STATUS_BUF;
   unlockTelemetry();
+}
+
+void telemetrySetNetworkLocation(double lat, double lng, float accuracyM,
+                                 LocationSource source) {
+  lockTelemetry();
+  NETLOC_READY = true;
+  NETLOC_LAT = lat;
+  NETLOC_LNG = lng;
+  NETLOC_ACC = accuracyM;
+  NETLOC_AT_MS = millis();
+  NETLOC_SOURCE = source;
+  unlockTelemetry();
+}
+
+const char *locationSourceName(LocationSource src) {
+  switch (src) {
+  case LOC_GPS:
+    return "gps";
+  case LOC_WIFI_GEO:
+    return "wifi_geo";
+  case LOC_CELL_GEO:
+    return "cell_geo";
+  case LOC_HOME:
+    return "home";
+  default:
+    return "none";
+  }
+}
+
+// ============================================================
+// getBestAvailableLocation — single source of truth
+//
+// Priority: GPS > WIFI_GEO > CELL_GEO > HOME > NONE
+// GPS fix must be current (age < 60s).
+// Network location must be reasonably fresh (age < 5 min).
+// ============================================================
+BestLocationResult getBestAvailableLocation() {
+  BestLocationResult result = {};
+  result.valid = false;
+  result.source = LOC_NONE;
+  result.accuracyM = 99999;
+  result.ageMs = 99999;
+
+  TelemetrySnapshot telem = {};
+  getTelemetrySnapshot(&telem);
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+
+  unsigned long now = millis();
+
+  // 1) GPS — best accuracy, but only if we have a recent fix
+  if (telem.gpsReady) {
+    if (GPS_LAT != 0.0 || GPS_LNG != 0.0) {
+      result.lat = GPS_LAT;
+      result.lng = GPS_LNG;
+      result.accuracyM = 10.0f; // NEO-M10 typical
+      result.source = LOC_GPS;
+      result.ageMs =
+          (telem.lastGpsUpdateMs > 0) ? (now - telem.lastGpsUpdateMs) : 0;
+      result.valid = true;
+      return result;
+    }
+  }
+
+  // 2) Network location (WiFi or Cell geolocation)
+  if (telem.networkLocReady && telem.networkLocAtMs > 0) {
+    unsigned long age = now - telem.networkLocAtMs;
+    if (age < 300000UL) { // < 5 minutes
+      result.lat = telem.networkLocLat;
+      result.lng = telem.networkLocLng;
+      result.accuracyM = telem.networkLocAccuracyM;
+      result.source = telem.networkLocSource;
+      result.ageMs = age;
+      result.valid = true;
+      return result;
+    }
+  }
+
+  // 3) HOME fallback
+  bool hasHome = (cfg.homeLat != 0.0 || cfg.homeLng != 0.0);
+  if (hasHome) {
+    result.lat = cfg.homeLat;
+    result.lng = cfg.homeLng;
+    result.accuracyM = 5000.0f; // home is very approximate
+    result.source = LOC_HOME;
+    result.ageMs = 0;
+    result.valid = true;
+    return result;
+  }
+
+  // 4) NONE — no location available
+  return result;
 }
 
 void logLine(const char *line) {

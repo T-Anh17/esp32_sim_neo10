@@ -2,17 +2,43 @@
 
 bool buzzerActive = false;
 
+// KLJ-1230: passive piezo buzzer, resonant freq ~4100 Hz
+// Sử dụng LEDC để tạo tín hiệu PWM thay vì tone() (ko hỗ trợ tốt trên ESP32-S3)
+static bool _ledcAttached = false;
+
 void buzzer_init() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+static void buzzer_on(uint32_t freq) {
+  if (_ledcAttached) {
+    ledcDetach(BUZZER_PIN);
+    _ledcAttached = false;
+  }
+  if (ledcAttach(BUZZER_PIN, freq, 8)) { // 8-bit resolution
+    _ledcAttached = true;
+    ledcWrite(BUZZER_PIN, 128); // duty 50% -> square wave
+  } else {
+    Serial.println("[Buzzer] LEDC attach FAILED");
+  }
+}
+
+static void buzzer_off() {
+  if (_ledcAttached) {
+    ledcWrite(BUZZER_PIN, 0);
+    ledcDetach(BUZZER_PIN);
+    _ledcAttached = false;
+  }
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
 }
 
 void buzzer_beep(int duration, int times, int gap) {
   for (int i = 0; i < times; i++) {
-    tone(BUZZER_PIN, 2000); // Thay thế digitalWrite(HIGH) bằng tone 2kHz
+    buzzer_on(BUZZER_FREQ);
     delay(duration);
-    noTone(BUZZER_PIN); // Tắt âm thanh
-    digitalWrite(BUZZER_PIN, LOW);
+    buzzer_off();
     delay(gap);
   }
 }
@@ -59,6 +85,6 @@ void buzzer_sos() {
   }
 
   // Khi thoát vòng lặp, đảm bảo tắt còi
-  digitalWrite(BUZZER_PIN, LOW);
+  buzzer_off();
   Serial.println("[Buzzer] SOS Stopped");
 }

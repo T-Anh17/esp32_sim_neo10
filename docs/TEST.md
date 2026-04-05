@@ -254,3 +254,107 @@ curl http://192.168.4.1/config
 - **SPIFFS → LittleFS**: AssistNow now uses LittleFS matching `platformio.ini`
 - **LED conflicts resolved**: Only `ledTask` controls LED via state machine. GPS task no longer calls `setColor()`.
 - **HTTPS stability**: Tracking uses `WiFiClientSecure::setInsecure()` for demo.
+
+---
+
+## 7. Hybrid Location Tests (GPS/WiFi/Cell/Home)
+
+### TC01: Outdoor GPS ưu tiên cao nhất
+- **Tiền điều kiện**: Ngoài trời, WiFi có thể có hoặc không, SIM có thể có hoặc không.
+- **Bước**: Boot thiết bị -> Chờ GPS fix -> Mở /status hoặc xem portal -> Gọi /track_test.
+- **Kỳ vọng**: `loc_valid=true`, `loc_src="gps"`, `fix=true`, `loc_acc` nhỏ, khoảng mức GPS. Tracking payload gửi `locSource=gps`.
+
+### TC02: Indoor, có WiFi internet, chưa có GPS fix
+- **Tiền điều kiện**: Trong nhà, GPS khó fix, WiFi internet ổn, API geolocation hợp lệ.
+- **Bước**: Boot thiết bị -> Đo thời gian từ lúc boot -> Xem portal.
+- **Kỳ vọng**: Dưới 30s có `loc_valid=true`, `loc_src="wifi_geo"`, `fix=false`. `loc_acc` hợp lý vài chục đến vài trăm mét. Portal hiện `WIFI_GEO • <accuracy>m`.
+
+### TC03: Indoor, không WiFi, có SIM/CLBS
+- **Tiền điều kiện**: Tắt WiFi internet, SIM có sóng, modem hỗ trợ AT+CLBS.
+- **Bước**: Boot thiết bị -> Chờ task chạy -> Xem /status.
+- **Kỳ vọng**: `loc_valid=true`, `loc_src="cell_geo"`, `loc_acc` lớn hơn WiFi geolocation.
+
+### TC04: Không có GPS, WiFi geo, CLBS, nhưng có HOME
+- **Tiền điều kiện**: Đã lưu HOME trước đó.
+- **Bước**: Tắt mạng/WiFi. Boot nơi GPS không fix. Xem /status.
+- **Kỳ vọng**: `loc_valid=true`, `loc_src="home"`, dist tới HOME = 0. Tracking payload vẫn có lat/lng.
+
+### TC05: Không có bất kỳ nguồn vị trí nào
+- **Tiền điều kiện**: Xóa HOME, GPS không fix, WiFi fail, CLBS fail.
+- **Bước**: Boot thiết bị -> Gọi /status /track_test -> Bấm Lưu HOME.
+- **Kỳ vọng**: `loc_valid=false`, `loc_src="none"`, `save_home` trả ok=false.
+
+### TC06: GPS xuất hiện sau khi đã có WIFI_GEO
+- **Tiền điều kiện**: Lấy wifi_geo xong, mang ra ngoài trời.
+- **Bước**: Theo dõi /status.
+- **Kỳ vọng**: Ban đầu `wifi_geo`, sau khi GPS fix tự chuyển sang `gps`. Tracking cập nhật sang gps.
+
+### TC07: GPS xuất hiện sau khi đã có CELL_GEO
+- **Tiền điều kiện**: Có cell_geo, sau đó mang ra ngoài trời.
+- **Bước**: Theo dõi /status.
+- **Kỳ vọng**: Ban đầu `cell_geo`, sau chuyển sang `gps`.
+
+### TC08: Save HOME từ WIFI_GEO
+- **Tiền điều kiện**: Có wifi_geo, không GPS.
+- **Bước**: Bấm Lưu HOME -> Reboot.
+- **Kỳ vọng**: OK. Sau reboot, `has_home=true`. Tọa độ khớp wifi_geo.
+
+### TC09: Save HOME từ CELL_GEO
+- **Tiền điều kiện**: Có cell_geo, không GPS.
+- **Bước**: Bấm Lưu HOME.
+- **Kỳ vọng**: OK. Khoảng cách HOME tính được.
+
+### TC10: Save HOME từ GPS
+- **Tiền điều kiện**: GPS fix thật.
+- **Bước**: Bấm Lưu HOME.
+- **Kỳ vọng**: OK. Sai số nhỏ hơn lưu từ network.
+
+### TC11: SOS SMS dùng best location thay vì GPS-only
+- **Tiền điều kiện**: Có wifi_geo/cell_geo, chưa GPS. Kích hoạt SOS.
+- **Bước**: Nhận SMS -> Mở link.
+- **Kỳ vọng**: Link map không dùng mốc mặc định mà hiển thị đúng `best location`.
+
+### TC12: Tracking payload metadata
+- **Tiền điều kiện**: Mọi môi trường.
+- **Bước**: Gọi /track_test.
+- **Kỳ vọng**: Thấy `locSource`, `locAccuracyM`, `locAgeMs` khớp `/status`.
+
+### TC13: Portal hiển thị đúng nguồn vị trí
+- **Tiền điều kiện**: Lần lượt ở 3 trạng thái.
+- **Bước**: Xem portal.
+- **Kỳ vọng**: Hiển thị linh hoạt: `GPS • <sats>`, `WIFI_GEO • <acc>`, `CELL_GEO • <acc>`.
+
+### TC14: NETLOC_ENABLE thay đổi runtime
+- **Tiền điều kiện**: Đang chạy. Bật tắt `NETLOC_ENABLE`.
+- **Bước**: Quan sát log.
+- **Kỳ vọng**: Task tắt/mở theo cờ mà không cần reboot.
+
+### TC15: SOS aborts CLBS timeout
+- **Tiền điều kiện**: Đang fetch AT+CLBS. Kích hoạt SOS.
+- **Bước**: Theo dõi.
+- **Kỳ vọng**: CLBS bị hủy ngang để nhả simMutex cho SOS gửi SMS/Call.
+
+### TC16: WiFi geo fail -> Fallback CLBS
+- **Tiền điều kiện**: WiFi kết nối, sai API key. SIM có sóng.
+- **Bước**: Theo dõi.
+- **Kỳ vọng**: Fail WiFi, ngay lập tức thử chạy `doCellGeolocationCLBS()`, trả về `cell_geo`.
+
+### TC17: Cũ quá thì không ưu tiên
+- **Tiền điều kiện**: network location tuổi đời > 5 phút.
+- **Bước**: Xem status.
+- **Kỳ vọng**: Bị vô hiệu lực, rớt về `home` hoặc `none`.
+
+### TC18: Reboot giữ config
+- **Tiền điều kiện**: Lưu config `NETLOC_ENABLE`, test reboot.
+- **Bước**: Kiểm tra khởi chạy.
+- **Kỳ vọng**: NVS duy trì đúng trạng thái.
+
+### TC19: Accuracy sanity
+- **Tiền điều kiện**: Test từng nguồn.
+- **Bước**: Xem size `loc_acc`.
+- **Kỳ vọng**: gps nhỏ nhất, wifi_geo next, cell_geo next.
+
+### TC20: Không làm vỡ tracking định kỳ
+- **Tiền điều kiện**: Chạy 10-20 phút.
+- **Bước**: Quan sát.
+- **Kỳ vọng**: Không watchdog, không deadlock SIM/WiFi.

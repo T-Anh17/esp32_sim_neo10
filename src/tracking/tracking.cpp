@@ -69,7 +69,8 @@ static void appendGeoFields(String &json, double currentLat, double currentLng,
 }
 
 static String buildTrackingPayload(double lat, double lng, bool isTest,
-                                   const ConfigSnapshot &cfg) {
+                                   const ConfigSnapshot &cfg,
+                                   const BestLocationResult &loc) {
   String json = "{\"id\":\"" + String(DEVICE_ID) +
                 "\","
                 "\"lat\":" +
@@ -77,6 +78,14 @@ static String buildTrackingPayload(double lat, double lng, bool isTest,
                 ","
                 "\"lng\":" +
                 String(lng, 6);
+
+  json += ",\"locSource\":\"";
+  json += locationSourceName(loc.source);
+  json += "\"";
+  json += ",\"locAccuracyM\":";
+  json += String(loc.accuracyM, 1);
+  json += ",\"locAgeMs\":";
+  json += String(loc.ageMs);
 
   appendGeoFields(json, lat, lng, cfg);
 
@@ -152,16 +161,11 @@ void Tracking_Loop() {
 
   ConfigSnapshot cfg = {};
   getConfigSnapshot(&cfg);
-  double lat = GPS_getLatitude();
-  double lng = GPS_getLongitude();
-  if (lat == 0 && lng == 0) {
-    if (cfg.homeLat != 0 || cfg.homeLng != 0) {
-      lat = cfg.homeLat;
-      lng = cfg.homeLng;
-    }
-  }
+  BestLocationResult loc = getBestAvailableLocation();
+  if (!loc.valid)
+    return;
 
-  String json = buildTrackingPayload(lat, lng, false, cfg);
+  String json = buildTrackingPayload(loc.lat, loc.lng, false, cfg, loc);
 
   bool wifiOK = sendViaWiFi(json);
   if (!wifiOK)
@@ -177,16 +181,11 @@ String trackingTestRequest() {
 
   ConfigSnapshot cfg = {};
   getConfigSnapshot(&cfg);
-  double lat = GPS_getLatitude();
-  double lng = GPS_getLongitude();
-  if (lat == 0 && lng == 0) {
-    if (cfg.homeLat != 0 || cfg.homeLng != 0) {
-      lat = cfg.homeLat;
-      lng = cfg.homeLng;
-    }
-  }
+  BestLocationResult loc = getBestAvailableLocation();
+  if (!loc.valid)
+    return "{\"error\":\"No location available\"}";
 
-  String json = buildTrackingPayload(lat, lng, true, cfg);
+  String json = buildTrackingPayload(loc.lat, loc.lng, true, cfg, loc);
 
   HTTPClient http;
   WiFiClientSecure client;

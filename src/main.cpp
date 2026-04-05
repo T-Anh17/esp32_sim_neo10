@@ -2,6 +2,7 @@
 
 TaskHandle_t xHandle_gps = NULL;
 TaskHandle_t xHandle_sim7680c = NULL;
+TaskHandle_t xHandle_netloc = NULL;
 
 static void monitorTask(void *pvParameters) {
   vTaskDelay(pdMS_TO_TICKS(4000));
@@ -112,6 +113,7 @@ void setup() {
   xTaskCreate(ledTask, "ledTask", 2048, NULL, 1, NULL);
   xTaskCreate(signalMonitorTask, "sigMon", 4096, NULL, 1, NULL);
   xTaskCreate(monitorTask, "monTask", 4096, NULL, 1, NULL);
+  xTaskCreate(networkLocationTask, "netLoc", 8192, NULL, 1, &xHandle_netloc);
 }
 
 void loop() {

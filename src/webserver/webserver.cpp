@@ -75,7 +75,7 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
 <div class=hd>
   <h1>📡 SOS GPS Tracker</h1>
   <div class=st>
-    <span class=ch id=sg>GPS: --</span>
+    <span class=ch id=sg>Vị trí: --</span>
     <span class=ch id=sd>Khoảng cách: --</span>
     <span class=ch id=gf>Vùng: --</span>
     <span class=ch id=s4>4G: --</span>
@@ -97,7 +97,7 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
     <div class=kv><span>HOME</span><b id=home>Chưa có</b></div>
     <div class=kv><span>Khoảng cách tới HOME</span><b id=dist>--</b></div>
     <div class=kv><span>Geofence</span><b id=geo>--</b></div>
-    <div class=sub>• <b>Lưu HOME</b> sẽ lấy vị trí GPS hiện tại làm “nhà”.</div>
+    <div class=sub>• <b>Lưu HOME</b> sẽ lấy vị trí hiện tại làm “nhà” (ưu tiên GPS > WiFi > Cell).</div>
     <div class=sub>• Trạng thái chi tiết (GPS/sóng/cảnh báo) xem ở Serial log.</div>
   </div>
 
@@ -125,12 +125,13 @@ function sv(){var b=$('bs');b.disabled=true;b.textContent='Đang lưu...';
     .finally(function(){b.disabled=false;b.textContent='Lưu cấu hình'})}
 function sh(){var b=$('bh');b.disabled=true;b.textContent='Đang lưu...';
   fetch('/save_home',{method:'POST'}).then(function(r){return r.json()}).then(function(j){
-    toast(j.ok?'Đã lưu HOME!':(j.msg||'GPS chưa có fix'),('ok' in j&&j.ok))
+    toast(j.ok?'Đã lưu HOME!':(j.msg||'Chưa có vị trí hợp lệ'),('ok' in j&&j.ok))
   }).catch(function(){toast('Không thể lưu',false)})
     .finally(function(){b.disabled=false;b.textContent='Lưu HOME'})}
 function cl(v){return v>6?'g':v>3?'y':'r'}
 function poll(){fetch('/status').then(function(r){return r.json()}).then(function(s){
-  $('sg').textContent='GPS: '+(s.fix?('FIX • '+s.sats+' vệ tinh'):'NO FIX');$('sg').className='ch '+(s.fix?'g':'r');
+  var ls='NO FIX';if(s.loc_valid){ls=s.loc_src=='GPS'?('GPS • '+s.sats+' sats'):(s.loc_src+' • '+Math.round(s.loc_acc)+'m');}
+  $('sg').textContent='Vị trí: '+ls;$('sg').className='ch '+(s.loc_valid?(s.loc_src=='GPS'?'g':'y'):'r');
   var dOk=(s.dist>=0);
   $('sd').textContent='Khoảng cách: '+(dOk?Math.round(s.dist)+'m':'--');$('sd').className='ch '+(dOk?'g':'');
   $('gf').textContent='Vùng: '+(s.geo_en?('ON • '+s.geo_rad+'m'):'OFF');$('gf').className='ch '+(s.geo_en?'y':'');
@@ -139,7 +140,7 @@ function poll(){fetch('/status').then(function(r){return r.json()}).then(functio
   $('home').textContent=s.has_home?'Đã có':'Chưa có';
   $('dist').textContent=dOk?(Math.round(s.dist)+' m'):'--';
   $('geo').textContent=s.geo_en?('Bật • bán kính '+s.geo_rad+'m'):'Tắt';
-  $('bh').disabled=!s.fix;
+  $('bh').disabled=!s.loc_valid;
 }).catch(function(){})}
 init();poll();setInterval(poll,2000);
 </script></body></html>
@@ -208,22 +209,19 @@ void initFriendlyNamePortal() {
     r->send(200, "text/plain", "OK");
   });
 
-  // --- POST /save_home → save current GPS as HOME ---
+  // --- POST /save_home → save current location as HOME ---
   server.on("/save_home", HTTP_POST, [](AsyncWebServerRequest *r) {
-    TelemetrySnapshot telem = {};
-    getTelemetrySnapshot(&telem);
-    if (!telem.gpsReady) {
-      r->send(200, "application/json", "{\"ok\":false,\"msg\":\"No GPS fix\"}");
+    BestLocationResult loc = getBestAvailableLocation();
+    if (!loc.valid) {
+      r->send(200, "application/json", "{\"ok\":false,\"msg\":\"Kh\u00f4ng c\u00f3 v\u1ecb tr\u00ed h\u1ee3p l\u1ec7\"}");
       return;
     }
-    double lat = GPS_getLatitude();
-    double lng = GPS_getLongitude();
-    if (lat == 0 && lng == 0) {
+    if (loc.lat == 0 && loc.lng == 0) {
       r->send(200, "application/json",
-              "{\"ok\":false,\"msg\":\"GPS position is 0,0\"}");
+              "{\"ok\":false,\"msg\":\"V\u1ecb tr\u00ed l\u1ed7i (0,0)\"}");
       return;
     }
-    saveHomeLocation(lat, lng);
+    saveHomeLocation(loc.lat, loc.lng);
     r->send(200, "application/json", "{\"ok\":true}");
   });
 
@@ -234,23 +232,29 @@ void initFriendlyNamePortal() {
     getConfigSnapshot(&cfg);
     getTelemetrySnapshot(&telem);
 
+    BestLocationResult loc = getBestAvailableLocation();
     bool fix = telem.gpsReady;
     int sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
-    double lat = GPS_getLatitude();
-    double lng = GPS_getLongitude();
+    double lat = loc.valid ? loc.lat : 0.0;
+    double lng = loc.valid ? loc.lng : 0.0;
     bool hasHome = (cfg.homeLat != 0 || cfg.homeLng != 0);
     double dist = -1;
-    if (hasHome && fix && (lat != 0 || lng != 0))
+    if (hasHome && loc.valid && (lat != 0 || lng != 0))
       dist = calculateDistance(lat, lng, cfg.homeLat, cfg.homeLng);
 
-    char buf[192];
+    char buf[320];
     snprintf(buf, sizeof(buf),
              "{\"fix\":%s,\"sats\":%d,\"dist\":%.1f,"
              "\"c4\":%d,\"wf\":%d,\"has_home\":%s,"
-             "\"geo_en\":%s,\"geo_rad\":%d}",
+             "\"geo_en\":%s,\"geo_rad\":%d,"
+             "\"loc_valid\":%s,\"loc_src\":\"%s\","
+             "\"loc_acc\":%.1f,\"loc_age\":%lu,"
+             "\"lat\":%.6f,\"lng\":%.6f}",
              fix ? "true" : "false", sats, dist, telem.signal4G,
              telem.signalWiFi, hasHome ? "true" : "false",
-             cfg.geofenceEnable ? "true" : "false", cfg.geofenceRadiusM);
+             cfg.geofenceEnable ? "true" : "false", cfg.geofenceRadiusM,
+             loc.valid ? "true" : "false", locationSourceName(loc.source),
+             loc.accuracyM, loc.ageMs, lat, lng);
     r->send(200, "application/json", buf);
   });
 

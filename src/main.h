@@ -15,7 +15,9 @@
 #include "strip/strip.h"
 #include "tracking/tracking.h"
 #include "webserver/webserver.h"
+#include "network_location/location.h"
 
 // Task handles
 extern TaskHandle_t xHandle_gps;
 extern TaskHandle_t xHandle_sim7680c;
+extern TaskHandle_t xHandle_netloc;

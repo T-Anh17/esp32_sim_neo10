@@ -16,6 +16,35 @@ constexpr size_t CONFIG_SMS_LEN = 256;
 constexpr size_t CONFIG_ASSIST_CHIPCODE_LEN = 64;
 constexpr size_t CONFIG_ASSIST_TOKEN_LEN = 128;
 constexpr size_t TELEMETRY_STATUS_LEN = 32;
+constexpr size_t CONFIG_NETLOC_KEY_LEN = 64;
+
+// ============================================================
+// Location source priority (higher = better)
+// ============================================================
+enum LocationSource : uint8_t {
+  LOC_NONE = 0,
+  LOC_HOME = 1,
+  LOC_CELL_GEO = 2,
+  LOC_WIFI_GEO = 3,
+  LOC_GPS = 4,
+};
+
+const char *locationSourceName(LocationSource src);
+
+// ============================================================
+// Best available location — single source of truth
+// All consumers (tracking, SOS, webserver) should use this.
+// ============================================================
+struct BestLocationResult {
+  double lat;
+  double lng;
+  float accuracyM;        // estimated accuracy in meters
+  LocationSource source;
+  unsigned long ageMs;    // how old is this fix (millis since obtained)
+  bool valid;             // true if we have any usable location
+};
+
+BestLocationResult getBestAvailableLocation();
 
 struct ConfigSnapshot {
   char call1[CONFIG_PHONE_LEN];
@@ -34,6 +63,10 @@ struct ConfigSnapshot {
   char assistChipcode[CONFIG_ASSIST_CHIPCODE_LEN];
   char assistToken[CONFIG_ASSIST_TOKEN_LEN];
   bool simTrackingEnable;
+  // --- Network location config ---
+  bool netlocEnable;
+  char netlocApiKey[CONFIG_NETLOC_KEY_LEN];
+  char netlocProvider[32];
 };
 
 struct TelemetrySnapshot {
@@ -47,10 +80,18 @@ struct TelemetrySnapshot {
   int signalCsqRaw;
   int signalRssiRaw;
   unsigned long firstFixMs;
+  unsigned long lastGpsUpdateMs; // millis() of most recent GPS position update
   unsigned long bootMs;
   int trackWifiCode;
   int trackSimCode;
   char assistStatus[TELEMETRY_STATUS_LEN];
+  // --- Network location state ---
+  bool networkLocReady;
+  double networkLocLat;
+  double networkLocLng;
+  float networkLocAccuracyM;
+  unsigned long networkLocAtMs;  // millis() when location was obtained
+  LocationSource networkLocSource;
 };
 
 void initSharedState();
@@ -59,6 +100,7 @@ void applyConfigSnapshot(const ConfigSnapshot *snapshot);
 void updateHomeConfig(double lat, double lng);
 void getTelemetrySnapshot(TelemetrySnapshot *out);
 void telemetrySetGpsReady(bool ready, unsigned long firstFixMs);
+void telemetrySetLastGpsUpdate();
 void telemetrySetAssistReady(bool ready);
 void telemetrySetSimCapability(uint8_t level);
 void telemetrySetSosState(bool active);
@@ -72,6 +114,8 @@ void telemetrySetTrackCodes(int wifiCode, int simCode);
 void telemetrySetTrackWifiCode(int wifiCode);
 void telemetrySetTrackSimCode(int simCode);
 void telemetrySetAssistStatus(const char *status);
+void telemetrySetNetworkLocation(double lat, double lng, float accuracyM,
+                                 LocationSource source);
 
 void logLine(const char *line);
 void logPrintf(const char *fmt, ...);
@@ -111,6 +155,11 @@ extern char ASSIST_TOKEN[128];
 
 // --- SIM tracking ---
 extern bool SIM_TRACKING_ENABLE;
+
+// --- Network location config ---
+extern bool NETLOC_ENABLE;
+extern char NETLOC_API_KEY[CONFIG_NETLOC_KEY_LEN];
+extern char NETLOC_PROVIDER[32];
 
 // --- Runtime flags ---
 extern volatile uint8_t SIM_CAPABILITY_LEVEL;
