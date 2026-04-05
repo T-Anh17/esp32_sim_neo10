@@ -7,19 +7,21 @@
 
 void initGeofencing() {
   // Config already loaded by loadDataFromRom() in Storage
-  Serial.printf("[GPS] Geofence: enabled=%d radius=%dm home=%.6f,%.6f\n",
-                GEOFENCE_ENABLE, GEOFENCE_RADIUS_M, HOME_LAT, HOME_LNG);
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+  logPrintf("[GPS] Geofence: enabled=%d radius=%dm home=%.6f,%.6f",
+            cfg.geofenceEnable ? 1 : 0, cfg.geofenceRadiusM, cfg.homeLat,
+            cfg.homeLng);
 }
 
 void saveHomeLocation(double lat, double lng) {
-  HOME_LAT = lat;
-  HOME_LNG = lng;
+  updateHomeConfig(lat, lng);
 
-  nvs_set_blob(nvsHandle, "HOME_LAT", &HOME_LAT, sizeof(HOME_LAT));
-  nvs_set_blob(nvsHandle, "HOME_LNG", &HOME_LNG, sizeof(HOME_LNG));
+  nvs_set_blob(nvsHandle, "HOME_LAT", &lat, sizeof(lat));
+  nvs_set_blob(nvsHandle, "HOME_LNG", &lng, sizeof(lng));
   nvs_commit(nvsHandle);
 
-  Serial.printf("[GPS] Home saved: %.6f, %.6f\n", HOME_LAT, HOME_LNG);
+  logPrintf("[GPS] Home saved: %.6f, %.6f", lat, lng);
 }
 
 double calculateDistance(double lat1, double lng1, double lat2, double lng2) {

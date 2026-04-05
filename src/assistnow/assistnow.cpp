@@ -256,7 +256,7 @@ bool downloadAssistNow() {
   // FRESH CACHE → skip download entirely, inject directly
   if (isCacheFresh() && validateUBXFile()) {
     Serial.println("[ASSIST] Cache fresh + valid → skip download");
-    ASSIST_STATUS = "cache_fresh";
+    telemetrySetAssistStatus("cache_fresh");
     return true;
   }
 
@@ -268,7 +268,7 @@ bool downloadAssistNow() {
 
   if (!hasToken && !hasChipcode) {
     Serial.println("[ASSIST] No token/chipcode → cache-only mode");
-    ASSIST_STATUS = "no_credentials";
+    telemetrySetAssistStatus("no_credentials");
     return false;
   }
 
@@ -306,14 +306,14 @@ bool downloadAssistNow() {
     if (bytes > 0 && validateUBXFile()) {
       saveCacheTimestamp();
       Serial.printf("[ASSIST] ✓ OK: %d bytes\n", bytes);
-      ASSIST_STATUS = "download_ok";
+      telemetrySetAssistStatus("download_ok");
       return true;
     }
     // No delay before next URL — just move on
   }
 
   Serial.println("[ASSIST] All downloads failed");
-  ASSIST_STATUS = "download_fail";
+  telemetrySetAssistStatus("download_fail");
   return false;
 }
 
@@ -330,12 +330,12 @@ bool injectAssistNow(HardwareSerial &gpsSerial) {
     Serial.println("[ASSIST] To enable offline AssistNow:");
     Serial.println("[ASSIST]   1. Place 'assistnow.ubx' in data/");
     Serial.println("[ASSIST]   2. Run: pio run -t uploadfs");
-    ASSIST_STATUS = "no_cache";
+    telemetrySetAssistStatus("no_cache");
     return false;
   }
 
   if (!validateUBXFile()) {
-    ASSIST_STATUS = "cache_invalid";
+    telemetrySetAssistStatus("cache_invalid");
     return false;
   }
 
@@ -362,10 +362,10 @@ bool injectAssistNow(HardwareSerial &gpsSerial) {
 
   if (totalBytes > 0) {
     // Set status: keep download_ok/cache_fresh if already set
-    if (strcmp(ASSIST_STATUS, "download_ok") != 0 &&
-        strcmp(ASSIST_STATUS, "cache_fresh") != 0) {
-      ASSIST_STATUS = "cached_injected";
-    }
+      if (strcmp(ASSIST_STATUS, "download_ok") != 0 &&
+          strcmp(ASSIST_STATUS, "cache_fresh") != 0) {
+        telemetrySetAssistStatus("cached_injected");
+      }
     return true;
   }
   return false;

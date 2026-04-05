@@ -24,11 +24,12 @@
 //   -95      1
 //   -100     0
 // ============================================================
-int wifi_getSignalLevel() {
+int wifi_getSignalLevel(int *rawRssi) {
   if (WiFi.status() != WL_CONNECTED)
     return 0;
   int rssi = WiFi.RSSI();
-  SIGNAL_RSSI_RAW = rssi;
+  if (rawRssi)
+    *rawRssi = rssi;
   int level = (rssi + 100) / 5;
   if (level < 0)
     level = 0;
@@ -72,21 +73,21 @@ static int csqToLevel(int csq) {
 // ============================================================
 static int getSignalLevel() {
   // WiFi
-  int levelWiFi = wifi_getSignalLevel();
-  SIGNAL_WIFI = levelWiFi;
+  int rssi = 0;
+  int levelWiFi = wifi_getSignalLevel(&rssi);
 
   // 4G
   int csq = 99;
   int level4G = 0;
-  if (SIM_READY) {
+  if (SIM_hasCapability(SIM_CAP_RADIO_OK)) {
+    sim_isRegistered(); // keep voice/data gating in sync as network comes/goes
     csq = sim_readCSQ();
     level4G = csqToLevel(csq);
   }
-  SIGNAL_CSQ_RAW = csq;
-  SIGNAL_4G = level4G;
+  telemetrySetSignalLevels(level4G, levelWiFi, csq, rssi);
 
   // Combined: prefer 4G (primary comms for SMS/call)
-  if (SIM_READY && level4G > 0)
+  if (SIM_hasCapability(SIM_CAP_VOICE_SMS_OK) && level4G > 0)
     return level4G;
   return levelWiFi;
 }
@@ -98,30 +99,33 @@ static int getSignalLevel() {
 //   2 = SMS + call cascade (CALL1..3 then HOTLINE)
 // ============================================================
 static void sendWarning() {
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+
   String link = getGPSLink();
   String msg = "Canh bao sap mat song! Vi tri: " + link;
 
   int sent = 0;
-  const char *nums[] = {CALL_1, CALL_2, CALL_3};
+  const char *nums[] = {cfg.call1, cfg.call2, cfg.call3};
   for (int i = 0; i < 3; i++) {
     if (strlen(nums[i]) >= 3) {
       SIM7680C_sendSMS_to(nums[i], msg);
-      Serial.printf("[SIGNAL] warn_sms_sent to=%s\n", nums[i]);
+      logPrintf("[SIGNAL] warn_sms_sent to=%s", nums[i]);
       sent++;
     }
   }
   if (sent == 0)
-    Serial.println("[SIGNAL] warn: no phone numbers configured!");
+    logLine("[SIGNAL] warn: no phone numbers configured!");
 
-  if (SIGNAL_WARN_CALL_MODE == 1 && strlen(HOTLINE_NUMBER) >= 3) {
-    Serial.printf("[SIGNAL] warn_call_hotline_started hotline=%s ring=%ds\n",
-                  HOTLINE_NUMBER, RING_SECONDS);
-    SIM7680C_callNumber(HOTLINE_NUMBER, RING_SECONDS);
-  } else if (SIGNAL_WARN_CALL_MODE == 2) {
-    Serial.println("[SIGNAL] warn_call_cascade_started");
+  if (cfg.signalWarnCallMode == 1 && strlen(cfg.hotline) >= 3) {
+    logPrintf("[SIGNAL] warn_call_hotline_started hotline=%s ring=%ds",
+              cfg.hotline, cfg.ringSeconds);
+    SIM7680C_callNumber(cfg.hotline, cfg.ringSeconds);
+  } else if (cfg.signalWarnCallMode == 2) {
+    logLine("[SIGNAL] warn_call_cascade_started");
     SIM7680C_callCascade();
   } else {
-    Serial.println("[SIGNAL] warn_call_mode=off (SMS only)");
+    logLine("[SIGNAL] warn_call_mode=off (SMS only)");
   }
 }
 
@@ -136,7 +140,7 @@ static void sendWarning() {
 #define HISTORY_SIZE 6
 
 void signalMonitorTask(void *pvParameters) {
-  Serial.println("[SIGNAL] Monitor task started");
+  logLine("[SIGNAL] Monitor task started");
   vTaskDelay(pdMS_TO_TICKS(10000)); // wait for modem init
 
   int history[HISTORY_SIZE] = {5, 5, 5, 5, 5, 5};
@@ -148,12 +152,14 @@ void signalMonitorTask(void *pvParameters) {
     int level = getSignalLevel();
 
     // --- Warning logic: only runs if enabled ---
-    if (SIGNAL_WARN_ENABLE && !SOS_ACTIVE) {
+    ConfigSnapshot cfg = {};
+    getConfigSnapshot(&cfg);
+    if (cfg.signalWarnEnable && !telemetryIsSosActive()) {
       history[histIdx] = level;
       histIdx = (histIdx + 1) % HISTORY_SIZE;
 
       unsigned long cooldownMs =
-          (unsigned long)SIGNAL_WARN_COOLDOWN_MIN * 60000UL;
+          (unsigned long)cfg.signalWarnCooldownMin * 60000UL;
       bool inCooldown =
           (lastWarnMs > 0 && (millis() - lastWarnMs) < cooldownMs);
 
@@ -167,7 +173,7 @@ void signalMonitorTask(void *pvParameters) {
             maxRecent = history[i];
         }
         if (maxRecent - level >= 3) {
-          Serial.printf("[SIGNAL] Rapid drop: %d -> %d\n", maxRecent, level);
+          logPrintf("[SIGNAL] Rapid drop: %d -> %d", maxRecent, level);
           trigger = true;
         }
 
@@ -180,14 +186,13 @@ void signalMonitorTask(void *pvParameters) {
               lowCount++;
           }
           if (lowCount >= 3) {
-            Serial.printf("[SIGNAL] Sustained low (%d consecutive)\n",
-                          lowCount);
+            logPrintf("[SIGNAL] Sustained low (%d consecutive)", lowCount);
             trigger = true;
           }
         }
 
         if (trigger) {
-          Serial.printf("[SIGNAL] TRIGGER! Level=%d\n", level);
+          logPrintf("[SIGNAL] TRIGGER! Level=%d", level);
           sendWarning();
           lastWarnMs = millis();
         }

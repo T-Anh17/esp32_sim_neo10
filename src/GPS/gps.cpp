@@ -192,14 +192,14 @@ static long detectGPSBaud() {
 
 // ---------------------- GPS TASK ---------------------------
 void gpsTask(void *pvParameters) {
-  Serial.println("[GPS] Init NEO-M10...");
+  logLine("[GPS] Init NEO-M10...");
 
   // 0) Autobaud detection
   long baud = detectGPSBaud();
   if (baud < 0) {
     baud = 38400;
     SerialGPS.begin(baud, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-    Serial.printf("[GPS] Fallback to %ld baud (may not work)\n", baud);
+    logPrintf("[GPS] Fallback to %ld baud (may not work)", baud);
   }
 
   vTaskDelay(pdMS_TO_TICKS(500));
@@ -216,23 +216,25 @@ void gpsTask(void *pvParameters) {
     if (WiFi.status() == WL_CONNECTED) {
       downloaded = downloadAssistNow();
     } else {
-      Serial.println("[ASSIST] No WiFi, cache-only mode");
+      logLine("[ASSIST] No WiFi, cache-only mode");
     }
 
     // Always try inject (works from cache even if download failed)
     if (injectAssistNow(SerialGPS)) {
-      ASSIST_READY = true;
+      telemetrySetAssistReady(true);
       sendUBX(CFG_RESET_HOT, sizeof(CFG_RESET_HOT));
       vTaskDelay(pdMS_TO_TICKS(300));
     }
 
     // Final status report (inject may have overridden download_fail)
-    Serial.printf("[ASSIST] Final status: %s ready=%d\n", ASSIST_STATUS,
-                  ASSIST_READY ? 1 : 0);
+    TelemetrySnapshot telem = {};
+    getTelemetrySnapshot(&telem);
+    logPrintf("[ASSIST] Final status: %s ready=%d", telem.assistStatus,
+              telem.assistReady ? 1 : 0);
   }
 
   // 2) Configure GPS (only after baud locked)
-  Serial.printf("[GPS] Configuring at %ld baud...\n", baud);
+  logPrintf("[GPS] Configuring at %ld baud...", baud);
   sendUBX(CFG_NMEA_UART1, sizeof(CFG_NMEA_UART1));
   vTaskDelay(20);
   sendUBX(CFG_UBX_PVT_OFF, sizeof(CFG_UBX_PVT_OFF));
@@ -244,7 +246,7 @@ void gpsTask(void *pvParameters) {
   vTaskDelay(20);
   sendUBX(CFG_RATE_5HZ, sizeof(CFG_RATE_5HZ));
   vTaskDelay(20);
-  Serial.println("[GPS] Configuration DONE");
+  logLine("[GPS] Configuration DONE");
 
   // 3) NMEA read loop
   while (true) {
@@ -257,10 +259,12 @@ void gpsTask(void *pvParameters) {
       lastLat = currentLat;
       lastLng = currentLng;
 
-      if (!GPS_READY) {
-        GPS_READY = true;
-        FIRST_FIX_MS = millis();
-        unsigned long ttff = (FIRST_FIX_MS - BOOT_MS) / 1000;
+      TelemetrySnapshot telem = {};
+      getTelemetrySnapshot(&telem);
+      if (!telem.gpsReady) {
+        unsigned long firstFixMs = millis();
+        telemetrySetGpsReady(true, firstFixMs);
+        unsigned long ttff = (firstFixMs - telem.bootMs) / 1000;
         char buf[100];
         snprintf(buf, sizeof(buf),
                  "[GPS] FIRST FIX! TTFF=%lus lat=%.6f lng=%.6f", ttff,

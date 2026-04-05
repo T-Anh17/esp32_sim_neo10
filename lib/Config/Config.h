@@ -3,12 +3,78 @@
 #include <Arduino.h>
 #include <nvs.h>
 #include <nvs_flash.h>
+#include <stdarg.h>
 
 // ============================================================
 // Global shared state
 // ============================================================
 extern nvs_handle_t nvsHandle;
 extern SemaphoreHandle_t serialMutex;
+
+constexpr size_t CONFIG_PHONE_LEN = 37;
+constexpr size_t CONFIG_SMS_LEN = 256;
+constexpr size_t CONFIG_ASSIST_CHIPCODE_LEN = 64;
+constexpr size_t CONFIG_ASSIST_TOKEN_LEN = 128;
+constexpr size_t TELEMETRY_STATUS_LEN = 32;
+
+struct ConfigSnapshot {
+  char call1[CONFIG_PHONE_LEN];
+  char call2[CONFIG_PHONE_LEN];
+  char call3[CONFIG_PHONE_LEN];
+  char hotline[CONFIG_PHONE_LEN];
+  int ringSeconds;
+  char smsTemplate[CONFIG_SMS_LEN];
+  bool geofenceEnable;
+  double homeLat;
+  double homeLng;
+  int geofenceRadiusM;
+  bool signalWarnEnable;
+  int signalWarnCooldownMin;
+  int signalWarnCallMode;
+  char assistChipcode[CONFIG_ASSIST_CHIPCODE_LEN];
+  char assistToken[CONFIG_ASSIST_TOKEN_LEN];
+  bool simTrackingEnable;
+};
+
+struct TelemetrySnapshot {
+  bool gpsReady;
+  bool assistReady;
+  uint8_t simCapabilityLevel;
+  bool sosActive;
+  bool sosCancelRequested;
+  int signal4G;
+  int signalWiFi;
+  int signalCsqRaw;
+  int signalRssiRaw;
+  unsigned long firstFixMs;
+  unsigned long bootMs;
+  int trackWifiCode;
+  int trackSimCode;
+  char assistStatus[TELEMETRY_STATUS_LEN];
+};
+
+void initSharedState();
+void getConfigSnapshot(ConfigSnapshot *out);
+void applyConfigSnapshot(const ConfigSnapshot *snapshot);
+void updateHomeConfig(double lat, double lng);
+void getTelemetrySnapshot(TelemetrySnapshot *out);
+void telemetrySetGpsReady(bool ready, unsigned long firstFixMs);
+void telemetrySetAssistReady(bool ready);
+void telemetrySetSimCapability(uint8_t level);
+void telemetrySetSosState(bool active);
+void telemetrySetSosCancelRequested(bool requested);
+bool telemetryIsSosActive();
+bool telemetryIsSosCancellationRequested();
+void telemetrySetSignalLevels(int signal4G, int signalWiFi, int signalCsqRaw,
+                              int signalRssiRaw);
+void telemetrySetBootMs(unsigned long bootMs);
+void telemetrySetTrackCodes(int wifiCode, int simCode);
+void telemetrySetTrackWifiCode(int wifiCode);
+void telemetrySetTrackSimCode(int simCode);
+void telemetrySetAssistStatus(const char *status);
+
+void logLine(const char *line);
+void logPrintf(const char *fmt, ...);
 
 // --- GPS state ---
 extern double GPS_LAT;
@@ -47,8 +113,9 @@ extern char ASSIST_TOKEN[128];
 extern bool SIM_TRACKING_ENABLE;
 
 // --- Runtime flags ---
-extern volatile bool SIM_READY;
+extern volatile uint8_t SIM_CAPABILITY_LEVEL;
 extern volatile bool SOS_ACTIVE;
+extern volatile bool SOS_CANCEL_REQUESTED;
 extern volatile int SIGNAL_4G;
 extern volatile int SIGNAL_WIFI;
 extern volatile int SIGNAL_CSQ_RAW;
@@ -67,11 +134,7 @@ extern char SMS[256];
 
 // Thread-safe log helper
 static inline void serialLog(const char *line) {
-  if (serialMutex)
-    xSemaphoreTake(serialMutex, pdMS_TO_TICKS(100));
-  Serial.println(line);
-  if (serialMutex)
-    xSemaphoreGive(serialMutex);
+  logLine(line);
 }
 
 #endif

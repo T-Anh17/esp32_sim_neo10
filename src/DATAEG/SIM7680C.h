@@ -3,7 +3,6 @@
 #include <Arduino.h>
 #include <HardwareSerial.h>
 
-
 extern HardwareSerial simSerial;
 extern SemaphoreHandle_t simMutex;
 
@@ -11,9 +10,24 @@ extern SemaphoreHandle_t simMutex;
 #define SIM_TX_PIN 2
 #define SIM_RX_PIN 3
 
+enum SimCapability : uint8_t {
+  SIM_CAP_NONE = 0,
+  SIM_CAP_BOOTING = 1,
+  SIM_CAP_RADIO_OK = 2,
+  SIM_CAP_VOICE_SMS_OK = 3,
+  SIM_CAP_DATA_OK = 4,
+  SIM_CAP_HTTP_OK = 5,
+};
+
 // --- Init ---
 void init_sim7680c();
 void task_init_sim7680c(void *pvParameters);
+
+// --- Capability state ---
+SimCapability SIM_getCapability();
+void SIM_setCapability(SimCapability capability);
+bool SIM_hasCapability(SimCapability minimumCapability);
+const char *SIM_capabilityName(SimCapability capability);
 
 // --- SMS ---
 void SIM7680C_sendSMS_to(const char *number, const String &message);
@@ -25,7 +39,7 @@ bool SIM7680C_callNumber(const char *number, int ringSeconds);
 void SIM7680C_callCascade(); // CALL_1 -> CALL_2 -> CALL_3 -> HOTLINE
 
 // --- HTTP ---
-void SIM7680C_httpPost(const String &url, const String &contentType,
+bool SIM7680C_httpPost(const String &url, const String &contentType,
                        const String &body);
 
 // --- Signal ---

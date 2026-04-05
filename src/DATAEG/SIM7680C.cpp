@@ -3,6 +3,78 @@
 HardwareSerial simSerial(2);
 SemaphoreHandle_t simMutex = NULL;
 
+static bool sim_cancelRequested() {
+  TelemetrySnapshot snapshot = {};
+  getTelemetrySnapshot(&snapshot);
+  return snapshot.sosActive && snapshot.sosCancelRequested;
+}
+
+SimCapability SIM_getCapability() {
+  TelemetrySnapshot snapshot = {};
+  getTelemetrySnapshot(&snapshot);
+  return static_cast<SimCapability>(snapshot.simCapabilityLevel);
+}
+
+void SIM_setCapability(SimCapability capability) {
+  telemetrySetSimCapability(static_cast<uint8_t>(capability));
+}
+
+bool SIM_hasCapability(SimCapability minimumCapability) {
+  return SIM_getCapability() >= minimumCapability;
+}
+
+const char *SIM_capabilityName(SimCapability capability) {
+  switch (capability) {
+  case SIM_CAP_BOOTING:
+    return "boot";
+  case SIM_CAP_RADIO_OK:
+    return "radio";
+  case SIM_CAP_VOICE_SMS_OK:
+    return "voice";
+  case SIM_CAP_DATA_OK:
+    return "data";
+  case SIM_CAP_HTTP_OK:
+    return "http";
+  default:
+    return "off";
+  }
+}
+
+static bool sim_detectDataSession() {
+  if (simMutex)
+    xSemaphoreTake(simMutex, portMAX_DELAY);
+
+  simSerial.println("AT+CGATT?");
+  String attachResp = sim_readResponse(500);
+  bool attached = (attachResp.indexOf("+CGATT: 1") >= 0);
+  bool hasIp = false;
+
+  if (attached) {
+    simSerial.println("AT+CGPADDR=1");
+    String ipResp = sim_readResponse(700);
+    int prefix = ipResp.indexOf("+CGPADDR: 1,");
+    if (prefix >= 0) {
+      for (int i = prefix + 12; i < ipResp.length(); i++) {
+        if (ipResp[i] >= '0' && ipResp[i] <= '9') {
+          hasIp = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (simMutex)
+    xSemaphoreGive(simMutex);
+
+  bool dataReady = attached && hasIp;
+  if (dataReady) {
+    SIM_setCapability(SIM_CAP_DATA_OK);
+  } else if (SIM_getCapability() > SIM_CAP_VOICE_SMS_OK) {
+    SIM_setCapability(SIM_CAP_VOICE_SMS_OK);
+  }
+  return dataReady;
+}
+
 // ============================================================
 // Helper: read modem response with timeout
 // ============================================================
@@ -22,11 +94,13 @@ String sim_readResponse(uint32_t timeoutMs) {
 // Init modem
 // ============================================================
 void init_sim7680c() {
-  Serial.println("[SIM7680C] Init...");
+  logLine("[SIM7680C] Init...");
+  SIM_setCapability(SIM_CAP_BOOTING);
+  telemetrySetTrackSimCode(0);
 
   simMutex = xSemaphoreCreateMutex();
   if (!simMutex) {
-    Serial.println("[SIM7680C] Mutex creation FAILED!");
+    logLine("[SIM7680C] Mutex creation FAILED!");
   }
 
   simSerial.begin(MCU_SIM_BAUDRATE, SERIAL_8N1, SIM_RX_PIN, SIM_TX_PIN);
@@ -42,9 +116,11 @@ void init_sim7680c() {
     }
   }
   if (!ready) {
-    Serial.println("[SIM7680C] No response!");
+    logLine("[SIM7680C] No response!");
+    SIM_setCapability(SIM_CAP_NONE);
     return;
   }
+  SIM_setCapability(SIM_CAP_RADIO_OK);
 
   // PDP context (Viettel)
   simSerial.println("AT+CGATT=1");
@@ -78,8 +154,13 @@ void init_sim7680c() {
         simSerial.read();
   }
 
-  SIM_READY = true;
-  Serial.println("[SIM7680C] Init done, ready.");
+  if (sim_isRegistered()) {
+    SIM_setCapability(SIM_CAP_VOICE_SMS_OK);
+    sim_detectDataSession();
+  }
+
+  logPrintf("[SIM7680C] Init done, capability=%s",
+            SIM_capabilityName(SIM_getCapability()));
 }
 
 void task_init_sim7680c(void *pvParameters) {
@@ -100,7 +181,14 @@ bool sim_isRegistered() {
   if (simMutex)
     xSemaphoreGive(simMutex);
 
-  return (r.indexOf(",1") > 0 || r.indexOf(",5") > 0);
+  bool registered = (r.indexOf(",1") > 0 || r.indexOf(",5") > 0);
+  if (registered) {
+    if (SIM_getCapability() < SIM_CAP_VOICE_SMS_OK)
+      SIM_setCapability(SIM_CAP_VOICE_SMS_OK);
+  } else if (SIM_getCapability() > SIM_CAP_RADIO_OK) {
+    SIM_setCapability(SIM_CAP_RADIO_OK);
+  }
+  return registered;
 }
 
 // ============================================================
@@ -160,37 +248,62 @@ int sim_getSignalLevel() {
 void SIM7680C_sendSMS_to(const char *number, const String &message) {
   if (!number || strlen(number) < 3)
     return;
-  if (!SIM_READY) {
-    Serial.println("[SIM7680C] Not ready, SMS skipped");
+  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK) && !sim_isRegistered()) {
+    logPrintf("[SIM7680C] SMS skipped, capability=%s",
+              SIM_capabilityName(SIM_getCapability()));
     return;
   }
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
-  Serial.printf("[SIM7680C] SMS -> %s\n", number);
+  if (sim_cancelRequested()) {
+    if (simMutex)
+      xSemaphoreGive(simMutex);
+    logLine("[SIM7680C] SMS cancelled before send");
+    return;
+  }
+
+  logPrintf("[SIM7680C] SMS -> %s", number);
 
   simSerial.printf("AT+CMGS=\"%s\"\r\n", number);
   delay(300);
+  if (sim_cancelRequested()) {
+    simSerial.write(27); // ESC cancels text-mode SMS input
+    delay(100);
+    while (simSerial.available())
+      simSerial.read();
+    if (simMutex)
+      xSemaphoreGive(simMutex);
+    logLine("[SIM7680C] SMS cancelled before payload");
+    return;
+  }
   simSerial.print(message);
   delay(100);
   simSerial.write(26); // Ctrl+Z
 
   unsigned long t0 = millis();
   while (millis() - t0 < 5000) {
+    if (sim_cancelRequested()) {
+      logLine("[SIM7680C] SMS cancel requested while waiting modem");
+      break;
+    }
     if (simSerial.available())
       Serial.write(simSerial.read());
     vTaskDelay(1);
   }
-  Serial.println("[SIM7680C] SMS done");
+  logLine("[SIM7680C] SMS done");
 
   if (simMutex)
     xSemaphoreGive(simMutex);
 }
 
 void SIM7680C_sendSMS(const String &mapLink) {
-  String msg = String(SMS_TEMPLATE) + " - Link: " + mapLink;
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+
+  String msg = String(cfg.smsTemplate) + " - Link: " + mapLink;
   msg += "\nWeb: https://thanhvu220809.github.io/gps-dashboard/";
-  SIM7680C_sendSMS_to(CALL_1, msg);
+  SIM7680C_sendSMS_to(cfg.call1, msg);
 }
 
 // ============================================================
@@ -199,14 +312,22 @@ void SIM7680C_sendSMS(const String &mapLink) {
 bool SIM7680C_callNumber(const char *number, int ringSeconds) {
   if (!number || strlen(number) < 3)
     return false;
-  if (!SIM_READY) {
-    Serial.printf("[CALL] Modem not ready, skip %s\n", number);
+  if (!SIM_hasCapability(SIM_CAP_VOICE_SMS_OK) && !sim_isRegistered()) {
+    logPrintf("[CALL] SIM capability=%s, skip %s",
+              SIM_capabilityName(SIM_getCapability()), number);
     return false;
   }
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
-  Serial.printf("[CALL] Dialing %s for %ds...\n", number, ringSeconds);
+  if (sim_cancelRequested()) {
+    if (simMutex)
+      xSemaphoreGive(simMutex);
+    logLine("[CALL] Cancelled before dial");
+    return false;
+  }
+
+  logPrintf("[CALL] Dialing %s for %ds...", number, ringSeconds);
   simSerial.printf("ATD%s;\r\n", number);
 
   unsigned long t0 = millis();
@@ -215,6 +336,10 @@ bool SIM7680C_callNumber(const char *number, int ringSeconds) {
   bool answered = false;
 
   while (millis() - t0 < timeoutMs) {
+    if (sim_cancelRequested()) {
+      logLine("[CALL] Cancel requested while ringing");
+      goto cleanup;
+    }
     while (simSerial.available()) {
       char c = simSerial.read();
       res += c;
@@ -222,11 +347,15 @@ bool SIM7680C_callNumber(const char *number, int ringSeconds) {
 
       // Check call state indicators
       if (res.indexOf("VOICE CALL: BEGIN") >= 0) {
-        Serial.println("\n[CALL] ANSWERED!");
+        logLine("[CALL] ANSWERED!");
         answered = true;
         // Wait for call to end
         unsigned long callStart = millis();
         while (millis() - callStart < 120000UL) { // max 2min
+          if (sim_cancelRequested()) {
+            logLine("[CALL] Cancel requested during active call");
+            goto cleanup;
+          }
           while (simSerial.available()) {
             char cc = simSerial.read();
             res += cc;
@@ -245,14 +374,14 @@ bool SIM7680C_callNumber(const char *number, int ringSeconds) {
       if (res.indexOf("NO CARRIER") >= 0 || res.indexOf("BUSY") >= 0 ||
           res.indexOf("NO ANSWER") >= 0 || res.indexOf("ERROR") >= 0 ||
           res.indexOf("VOICE CALL: END") >= 0) {
-        Serial.println("\n[CALL] Not answered / rejected");
-        goto cleanup;
+          logLine("[CALL] Not answered / rejected");
+          goto cleanup;
       }
     }
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 
-  Serial.println("[CALL] Ring timeout");
+  logLine("[CALL] Ring timeout");
 
 cleanup:
   simSerial.println("ATH");
@@ -271,34 +400,43 @@ cleanup:
 // Stops if any call is answered.
 // ============================================================
 void SIM7680C_callCascade() {
-  const char *numbers[] = {CALL_1, CALL_2, CALL_3, HOTLINE_NUMBER};
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+  const char *numbers[] = {cfg.call1, cfg.call2, cfg.call3, cfg.hotline};
   const char *labels[] = {"CALL_1", "CALL_2", "CALL_3", "HOTLINE"};
 
   for (int i = 0; i < 4; i++) {
+    if (sim_cancelRequested()) {
+      logLine("[CALL] Cascade cancelled");
+      return;
+    }
     if (strlen(numbers[i]) < 3) {
-      Serial.printf("[CALL] %s empty, skip\n", labels[i]);
+      logPrintf("[CALL] %s empty, skip", labels[i]);
       continue;
     }
-    Serial.printf("[CALL] Cascade step %d: %s -> %s\n", i + 1, labels[i],
-                  numbers[i]);
-    if (SIM7680C_callNumber(numbers[i], RING_SECONDS)) {
-      Serial.printf("[CALL] %s answered, cascade done\n", labels[i]);
+    logPrintf("[CALL] Cascade step %d: %s -> %s", i + 1, labels[i], numbers[i]);
+    if (SIM7680C_callNumber(numbers[i], cfg.ringSeconds)) {
+      logPrintf("[CALL] %s answered, cascade done", labels[i]);
+      return;
+    }
+    if (sim_cancelRequested()) {
+      logLine("[CALL] Cascade cancelled after step");
       return;
     }
     delay(2000); // brief pause between attempts
   }
-  Serial.println("[CALL] Cascade exhausted, nobody answered");
+  logLine("[CALL] Cascade exhausted, nobody answered");
 }
 
 // ============================================================
 // HTTP POST via modem
 // ============================================================
-void SIM7680C_httpPost(const String &url, const String &contentType,
+bool SIM7680C_httpPost(const String &url, const String &contentType,
                        const String &body) {
-  if (!SIM_READY)
-    return;
-  if (SOS_ACTIVE)
-    return; // don't use modem during SOS
+  if (!SIM_hasCapability(SIM_CAP_DATA_OK) && !sim_detectDataSession())
+    return false;
+  if (telemetryIsSosActive())
+    return false; // don't use modem during SOS
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
@@ -319,13 +457,18 @@ void SIM7680C_httpPost(const String &url, const String &contentType,
   simSerial.println("AT+HTTPACTION=1"); // POST
 
   String response = sim_readResponse(8000);
+  bool ok = false;
+  telemetrySetTrackSimCode(-1);
 
   int si = response.indexOf("+HTTPACTION: 1,");
   if (si != -1) {
     int ci = response.indexOf(",", si + 15);
     if (ci != -1) {
       String st = response.substring(si + 15, ci);
-      Serial.printf("[SIM7680C] HTTP Status: %s\n", st.c_str());
+      int statusCode = st.toInt();
+      telemetrySetTrackSimCode(statusCode);
+      logPrintf("[SIM7680C] HTTP Status: %s", st.c_str());
+      ok = (statusCode >= 200 && statusCode < 300);
     }
   }
 
@@ -336,4 +479,11 @@ void SIM7680C_httpPost(const String &url, const String &contentType,
 
   if (simMutex)
     xSemaphoreGive(simMutex);
+
+  if (ok)
+    SIM_setCapability(SIM_CAP_HTTP_OK);
+  else if (SIM_hasCapability(SIM_CAP_HTTP_OK))
+    SIM_setCapability(SIM_CAP_DATA_OK);
+
+  return ok;
 }

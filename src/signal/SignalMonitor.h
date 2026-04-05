@@ -22,4 +22,4 @@
 // ============================================================
 
 void signalMonitorTask(void *pvParameters);
-int wifi_getSignalLevel();
+int wifi_getSignalLevel(int *rawRssi = nullptr);

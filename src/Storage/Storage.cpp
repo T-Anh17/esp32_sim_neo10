@@ -38,16 +38,16 @@ static void nvsReadBool(const char *key, bool *out, bool def) {
 void initStorage() {
   esp_err_t err = nvs_flash_init();
   if (err != ESP_OK) {
-    Serial.println("[STORAGE] Flash init failed, restarting...");
+    logLine("[STORAGE] Flash init failed, restarting...");
     ESP.restart();
     return;
   }
   err = nvs_open("storage", NVS_READWRITE, &nvsHandle);
   if (err != ESP_OK) {
-    Serial.println("[STORAGE] NVS open failed, restarting...");
+    logLine("[STORAGE] NVS open failed, restarting...");
     ESP.restart();
   }
-  Serial.println("[STORAGE] NVS ready");
+  logLine("[STORAGE] NVS ready");
 }
 
 // ============================================================
@@ -61,97 +61,98 @@ static void handleFirstRun() {
     nvs_set_str(nvsHandle, "CHIPCODE", "RkNGNDM1MEUzNTU0OjUzRUVENjI0");
     nvs_set_u8(nvsHandle, "FIRST_RUN", 1);
     nvs_commit(nvsHandle);
-    Serial.println("[STORAGE] First run: seeded default CHIPCODE");
+    logLine("[STORAGE] First run: seeded default CHIPCODE");
   }
 }
 
-static void ensureFixedHotline() {
+static void ensureFixedHotline(ConfigSnapshot *cfg) {
   const char *kFixedHotline = "0982690587";
-  strncpy(HOTLINE_NUMBER, kFixedHotline, sizeof(HOTLINE_NUMBER) - 1);
-  HOTLINE_NUMBER[sizeof(HOTLINE_NUMBER) - 1] = '\0';
+  strncpy(cfg->hotline, kFixedHotline, sizeof(cfg->hotline) - 1);
+  cfg->hotline[sizeof(cfg->hotline) - 1] = '\0';
 
-  char savedHotline[sizeof(HOTLINE_NUMBER)] = {0};
+  char savedHotline[sizeof(cfg->hotline)] = {0};
   size_t len = sizeof(savedHotline);
   esp_err_t err = nvs_get_str(nvsHandle, "HOTLINE", savedHotline, &len);
-  if (err == ESP_OK && strcmp(savedHotline, HOTLINE_NUMBER) == 0)
+  if (err == ESP_OK && strcmp(savedHotline, cfg->hotline) == 0)
     return;
 
-  nvs_set_str(nvsHandle, "HOTLINE", HOTLINE_NUMBER);
+  nvs_set_str(nvsHandle, "HOTLINE", cfg->hotline);
   nvs_commit(nvsHandle);
-  Serial.printf("[STORAGE] Fixed HOTLINE saved: %s\n", HOTLINE_NUMBER);
+  logPrintf("[STORAGE] Fixed HOTLINE saved: %s", cfg->hotline);
 }
 
 // ============================================================
 void loadDataFromRom() {
-  Serial.println("[STORAGE] Loading config...");
+  logLine("[STORAGE] Loading config...");
+  ConfigSnapshot cfg = {};
 
   // First-run seeds (only once, ever)
   handleFirstRun();
 
   // Phone numbers
-  nvsReadStr("CALL_1", CALL_1, sizeof(CALL_1), DEFAULT_PHONE);
-  nvsReadStr("CALL_2", CALL_2, sizeof(CALL_2), "");
-  nvsReadStr("CALL_3", CALL_3, sizeof(CALL_3), "");
-  ensureFixedHotline();
-  strncpy(PHONE, CALL_1, sizeof(PHONE) - 1);
+  nvsReadStr("CALL_1", cfg.call1, sizeof(cfg.call1), DEFAULT_PHONE);
+  nvsReadStr("CALL_2", cfg.call2, sizeof(cfg.call2), "");
+  nvsReadStr("CALL_3", cfg.call3, sizeof(cfg.call3), "");
+  ensureFixedHotline(&cfg);
 
-  nvsReadI32("RING_SEC", &RING_SECONDS, 30);
-  nvsReadStr("SMS_TPL", SMS_TEMPLATE, sizeof(SMS_TEMPLATE), SMS_TEXT);
-  strncpy(SMS, SMS_TEMPLATE, sizeof(SMS) - 1);
+  nvsReadI32("RING_SEC", &cfg.ringSeconds, 30);
+  nvsReadStr("SMS_TPL", cfg.smsTemplate, sizeof(cfg.smsTemplate), SMS_TEXT);
 
   // Geofence
-  nvsReadBool("GEO_EN", &GEOFENCE_ENABLE, false);
-  nvsReadI32("GEO_RAD", &GEOFENCE_RADIUS_M, 200);
+  nvsReadBool("GEO_EN", &cfg.geofenceEnable, false);
+  nvsReadI32("GEO_RAD", &cfg.geofenceRadiusM, 200);
   double defLat = atof(GPS_LOCAL_LAT);
   double defLng = atof(GPS_LOCAL_LNG);
-  nvsReadBlob("HOME_LAT", &HOME_LAT, sizeof(HOME_LAT), &defLat);
-  nvsReadBlob("HOME_LNG", &HOME_LNG, sizeof(HOME_LNG), &defLng);
+  nvsReadBlob("HOME_LAT", &cfg.homeLat, sizeof(cfg.homeLat), &defLat);
+  nvsReadBlob("HOME_LNG", &cfg.homeLng, sizeof(cfg.homeLng), &defLng);
   nvsReadBlob("GPS_LAT", &GPS_LAT, sizeof(GPS_LAT), &defLat);
   nvsReadBlob("GPS_LNG", &GPS_LNG, sizeof(GPS_LNG), &defLng);
 
   // Signal warning
-  nvsReadBool("SIG_EN", &SIGNAL_WARN_ENABLE, false);
-  nvsReadI32("SIG_COOL", &SIGNAL_WARN_COOLDOWN_MIN, 15);
-  nvsReadI32("SIG_WCALL", &SIGNAL_WARN_CALL_MODE, 0);
+  nvsReadBool("SIG_EN", &cfg.signalWarnEnable, false);
+  nvsReadI32("SIG_COOL", &cfg.signalWarnCooldownMin, 15);
+  nvsReadI32("SIG_WCALL", &cfg.signalWarnCallMode, 0);
 
   // AssistNow — plain NVS read, no forced defaults
-  nvsReadStr("CHIPCODE", ASSIST_CHIPCODE, sizeof(ASSIST_CHIPCODE), "");
-  nvsReadStr("ASST_TOK", ASSIST_TOKEN, sizeof(ASSIST_TOKEN), "");
+  nvsReadStr("CHIPCODE", cfg.assistChipcode, sizeof(cfg.assistChipcode), "");
+  nvsReadStr("ASST_TOK", cfg.assistToken, sizeof(cfg.assistToken), "");
 
   // SIM tracking
-  nvsReadBool("SIM_TRK", &SIM_TRACKING_ENABLE, true);
+  nvsReadBool("SIM_TRK", &cfg.simTrackingEnable, true);
 
-  Serial.printf("[STORAGE] C1=%s C2=%s C3=%s HOT=%s\n", CALL_1, CALL_2, CALL_3,
-                HOTLINE_NUMBER);
-  Serial.printf("[STORAGE] CHIPCODE='%s' TOKEN='%s'\n", ASSIST_CHIPCODE,
-                ASSIST_TOKEN);
+  applyConfigSnapshot(&cfg);
+
+  logPrintf("[STORAGE] C1=%s C2=%s C3=%s HOT=%s", cfg.call1, cfg.call2,
+            cfg.call3, cfg.hotline);
+  logPrintf("[STORAGE] CHIPCODE='%s' TOKEN='%s'", cfg.assistChipcode,
+            cfg.assistToken);
 }
 
 // ============================================================
 void saveAllConfig() {
-  strncpy(PHONE, CALL_1, sizeof(PHONE) - 1);
-  strncpy(SMS, SMS_TEMPLATE, sizeof(SMS) - 1);
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
 
-  nvs_set_str(nvsHandle, "CALL_1", CALL_1);
-  nvs_set_str(nvsHandle, "CALL_2", CALL_2);
-  nvs_set_str(nvsHandle, "CALL_3", CALL_3);
-  nvs_set_str(nvsHandle, "HOTLINE", HOTLINE_NUMBER);
-  nvs_set_i32(nvsHandle, "RING_SEC", RING_SECONDS);
-  nvs_set_str(nvsHandle, "SMS_TPL", SMS_TEMPLATE);
+  nvs_set_str(nvsHandle, "CALL_1", cfg.call1);
+  nvs_set_str(nvsHandle, "CALL_2", cfg.call2);
+  nvs_set_str(nvsHandle, "CALL_3", cfg.call3);
+  nvs_set_str(nvsHandle, "HOTLINE", cfg.hotline);
+  nvs_set_i32(nvsHandle, "RING_SEC", cfg.ringSeconds);
+  nvs_set_str(nvsHandle, "SMS_TPL", cfg.smsTemplate);
 
-  nvs_set_u8(nvsHandle, "GEO_EN", GEOFENCE_ENABLE ? 1 : 0);
-  nvs_set_i32(nvsHandle, "GEO_RAD", GEOFENCE_RADIUS_M);
-  nvs_set_blob(nvsHandle, "HOME_LAT", &HOME_LAT, sizeof(HOME_LAT));
-  nvs_set_blob(nvsHandle, "HOME_LNG", &HOME_LNG, sizeof(HOME_LNG));
+  nvs_set_u8(nvsHandle, "GEO_EN", cfg.geofenceEnable ? 1 : 0);
+  nvs_set_i32(nvsHandle, "GEO_RAD", cfg.geofenceRadiusM);
+  nvs_set_blob(nvsHandle, "HOME_LAT", &cfg.homeLat, sizeof(cfg.homeLat));
+  nvs_set_blob(nvsHandle, "HOME_LNG", &cfg.homeLng, sizeof(cfg.homeLng));
 
-  nvs_set_u8(nvsHandle, "SIG_EN", SIGNAL_WARN_ENABLE ? 1 : 0);
-  nvs_set_i32(nvsHandle, "SIG_COOL", SIGNAL_WARN_COOLDOWN_MIN);
-  nvs_set_i32(nvsHandle, "SIG_WCALL", SIGNAL_WARN_CALL_MODE);
+  nvs_set_u8(nvsHandle, "SIG_EN", cfg.signalWarnEnable ? 1 : 0);
+  nvs_set_i32(nvsHandle, "SIG_COOL", cfg.signalWarnCooldownMin);
+  nvs_set_i32(nvsHandle, "SIG_WCALL", cfg.signalWarnCallMode);
 
-  nvs_set_str(nvsHandle, "CHIPCODE", ASSIST_CHIPCODE);
-  nvs_set_str(nvsHandle, "ASST_TOK", ASSIST_TOKEN);
-  nvs_set_u8(nvsHandle, "SIM_TRK", SIM_TRACKING_ENABLE ? 1 : 0);
+  nvs_set_str(nvsHandle, "CHIPCODE", cfg.assistChipcode);
+  nvs_set_str(nvsHandle, "ASST_TOK", cfg.assistToken);
+  nvs_set_u8(nvsHandle, "SIM_TRK", cfg.simTrackingEnable ? 1 : 0);
 
   nvs_commit(nvsHandle);
-  Serial.println("[STORAGE] Saved");
+  logLine("[STORAGE] Saved");
 }

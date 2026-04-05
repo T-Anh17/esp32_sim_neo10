@@ -1,5 +1,6 @@
 #include "strip.h"
 #include "Config.h"
+#include "DATAEG/SIM7680C.h"
 #include <WiFi.h>
 
 // ============================================================
@@ -44,10 +45,12 @@ void ledTask(void *pvParameters) {
   bool toggle = false;
 
   while (true) {
+    TelemetrySnapshot telem = {};
+    getTelemetrySnapshot(&telem);
     toggle = !toggle;
 
     // Priority 1: SOS active → fast red blink
-    if (SOS_ACTIVE) {
+    if (telem.sosActive) {
       setColor(toggle ? 255 : 0, 0, 0);
       vTaskDelay(pdMS_TO_TICKS(250));
       continue;
@@ -61,14 +64,16 @@ void ledTask(void *pvParameters) {
     }
 
     // Priority 3: No GPS fix → solid red
-    if (!GPS_READY) {
+    if (!telem.gpsReady) {
       setColor(255, 0, 0);
       vTaskDelay(pdMS_TO_TICKS(1000));
       continue;
     }
 
     // Priority 4: GPS fix + network → solid green
-    bool networkOK = (WiFi.status() == WL_CONNECTED) || SIM_READY;
+    bool networkOK =
+        (WiFi.status() == WL_CONNECTED) ||
+        (telem.simCapabilityLevel >= SIM_CAP_VOICE_SMS_OK);
     if (networkOK) {
       setColor(0, 255, 0);
     } else {

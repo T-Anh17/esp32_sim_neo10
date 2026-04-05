@@ -156,21 +156,24 @@ void initFriendlyNamePortal() {
 
   // --- GET /config → JSON for form prefill ---
   server.on("/config", HTTP_GET, [](AsyncWebServerRequest *r) {
-    String j = "{\"c1\":\"" + jsonEsc(CALL_1) +
+    ConfigSnapshot cfg = {};
+    getConfigSnapshot(&cfg);
+
+    String j = "{\"c1\":\"" + jsonEsc(cfg.call1) +
                "\","
                "\"c2\":\"" +
-               jsonEsc(CALL_2) +
+               jsonEsc(cfg.call2) +
                "\","
                "\"c3\":\"" +
-               jsonEsc(CALL_3) +
+               jsonEsc(cfg.call3) +
                "\","
                "\"sms\":\"" +
-               jsonEsc(SMS_TEMPLATE) +
+               jsonEsc(cfg.smsTemplate) +
                "\","
                "\"home\":" +
-               String((HOME_LAT != 0 || HOME_LNG != 0) ? "true" : "false") +
-               ",\"geo_en\":" + String(GEOFENCE_ENABLE ? "true" : "false") +
-               ",\"geo_rad\":" + String(GEOFENCE_RADIUS_M) +
+               String((cfg.homeLat != 0 || cfg.homeLng != 0) ? "true" : "false") +
+               ",\"geo_en\":" + String(cfg.geofenceEnable ? "true" : "false") +
+               ",\"geo_rad\":" + String(cfg.geofenceRadiusM) +
                "}";
     r->send(200, "application/json", j);
   });
@@ -181,34 +184,35 @@ void initFriendlyNamePortal() {
       return r->hasParam(n, true) ? r->getParam(n, true)->value() : String("");
     };
 
-    strncpy(CALL_1, val("c1").c_str(), sizeof(CALL_1) - 1);
-    CALL_1[sizeof(CALL_1) - 1] = '\0';
-    strncpy(CALL_2, val("c2").c_str(), sizeof(CALL_2) - 1);
-    CALL_2[sizeof(CALL_2) - 1] = '\0';
-    strncpy(CALL_3, val("c3").c_str(), sizeof(CALL_3) - 1);
-    CALL_3[sizeof(CALL_3) - 1] = '\0';
-    strncpy(SMS_TEMPLATE, val("sms").c_str(), sizeof(SMS_TEMPLATE) - 1);
-    SMS_TEMPLATE[sizeof(SMS_TEMPLATE) - 1] = '\0';
-
-    // Update legacy copies
-    strncpy(PHONE, CALL_1, sizeof(PHONE) - 1);
-    strncpy(SMS, SMS_TEMPLATE, sizeof(SMS) - 1);
+    ConfigSnapshot cfg = {};
+    getConfigSnapshot(&cfg);
+    strncpy(cfg.call1, val("c1").c_str(), sizeof(cfg.call1) - 1);
+    cfg.call1[sizeof(cfg.call1) - 1] = '\0';
+    strncpy(cfg.call2, val("c2").c_str(), sizeof(cfg.call2) - 1);
+    cfg.call2[sizeof(cfg.call2) - 1] = '\0';
+    strncpy(cfg.call3, val("c3").c_str(), sizeof(cfg.call3) - 1);
+    cfg.call3[sizeof(cfg.call3) - 1] = '\0';
+    strncpy(cfg.smsTemplate, val("sms").c_str(), sizeof(cfg.smsTemplate) - 1);
+    cfg.smsTemplate[sizeof(cfg.smsTemplate) - 1] = '\0';
+    applyConfigSnapshot(&cfg);
 
     // Save ONLY these 4 fields to NVS (nothing else disturbed)
-    nvs_set_str(nvsHandle, "CALL_1", CALL_1);
-    nvs_set_str(nvsHandle, "CALL_2", CALL_2);
-    nvs_set_str(nvsHandle, "CALL_3", CALL_3);
-    nvs_set_str(nvsHandle, "SMS_TPL", SMS_TEMPLATE);
+    nvs_set_str(nvsHandle, "CALL_1", cfg.call1);
+    nvs_set_str(nvsHandle, "CALL_2", cfg.call2);
+    nvs_set_str(nvsHandle, "CALL_3", cfg.call3);
+    nvs_set_str(nvsHandle, "SMS_TPL", cfg.smsTemplate);
     nvs_commit(nvsHandle);
 
-    Serial.printf("[PORTAL] Saved: C1=%s C2=%s C3=%s\n", CALL_1, CALL_2,
-                  CALL_3);
+    logPrintf("[PORTAL] Saved: C1=%s C2=%s C3=%s", cfg.call1, cfg.call2,
+              cfg.call3);
     r->send(200, "text/plain", "OK");
   });
 
   // --- POST /save_home → save current GPS as HOME ---
   server.on("/save_home", HTTP_POST, [](AsyncWebServerRequest *r) {
-    if (!GPS_READY) {
+    TelemetrySnapshot telem = {};
+    getTelemetrySnapshot(&telem);
+    if (!telem.gpsReady) {
       r->send(200, "application/json", "{\"ok\":false,\"msg\":\"No GPS fix\"}");
       return;
     }
@@ -225,23 +229,28 @@ void initFriendlyNamePortal() {
 
   // --- GET /status → combined GPS + signal + distance (one request) ---
   server.on("/status", HTTP_GET, [](AsyncWebServerRequest *r) {
-    bool fix = GPS_READY;
+    ConfigSnapshot cfg = {};
+    TelemetrySnapshot telem = {};
+    getConfigSnapshot(&cfg);
+    getTelemetrySnapshot(&telem);
+
+    bool fix = telem.gpsReady;
     int sats = gps.satellites.isValid() ? gps.satellites.value() : 0;
     double lat = GPS_getLatitude();
     double lng = GPS_getLongitude();
-    bool hasHome = (HOME_LAT != 0 || HOME_LNG != 0);
+    bool hasHome = (cfg.homeLat != 0 || cfg.homeLng != 0);
     double dist = -1;
     if (hasHome && fix && (lat != 0 || lng != 0))
-      dist = calculateDistance(lat, lng, HOME_LAT, HOME_LNG);
+      dist = calculateDistance(lat, lng, cfg.homeLat, cfg.homeLng);
 
     char buf[192];
     snprintf(buf, sizeof(buf),
              "{\"fix\":%s,\"sats\":%d,\"dist\":%.1f,"
              "\"c4\":%d,\"wf\":%d,\"has_home\":%s,"
              "\"geo_en\":%s,\"geo_rad\":%d}",
-             fix ? "true" : "false", sats, dist, (int)SIGNAL_4G,
-             (int)SIGNAL_WIFI, hasHome ? "true" : "false",
-             GEOFENCE_ENABLE ? "true" : "false", (int)GEOFENCE_RADIUS_M);
+             fix ? "true" : "false", sats, dist, telem.signal4G,
+             telem.signalWiFi, hasHome ? "true" : "false",
+             cfg.geofenceEnable ? "true" : "false", cfg.geofenceRadiusM);
     r->send(200, "application/json", buf);
   });
 
@@ -251,9 +260,11 @@ void initFriendlyNamePortal() {
   });
 
   server.on("/assist_status", HTTP_GET, [](AsyncWebServerRequest *r) {
+    TelemetrySnapshot telem = {};
+    getTelemetrySnapshot(&telem);
     char buf[80];
     snprintf(buf, sizeof(buf), "{\"status\":\"%s\",\"ready\":%s}",
-             ASSIST_STATUS, ASSIST_READY ? "true" : "false");
+             telem.assistStatus, telem.assistReady ? "true" : "false");
     r->send(200, "application/json", buf);
   });
 
@@ -262,7 +273,7 @@ void initFriendlyNamePortal() {
       [](AsyncWebServerRequest *r) { r->redirect("http://192.168.4.1/"); });
 
   server.begin();
-  Serial.println("[PORTAL] http://192.168.4.1 (or any URL on AP)");
+  logLine("[PORTAL] http://192.168.4.1 (or any URL on AP)");
 }
 
 void loopFriendlyNamePortal() { dnsServer.processNextRequest(); }
