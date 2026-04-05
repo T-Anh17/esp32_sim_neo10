@@ -21,8 +21,8 @@ import type {
 } from "../types/tracker";
 
 const REFRESH_INTERVAL_MS = 60000;
-
 const rangeOptions: HistoryRange[] = ["30m", "6h", "24h", "7d"];
+
 const STORAGE_KEYS = {
   locale: "neo10-webtool-locale",
   theme: "neo10-webtool-theme",
@@ -69,25 +69,17 @@ export function App() {
         if (!cancelled) setLoadingDevices(true);
         const nextDevices = await fetchDevices();
         if (cancelled) return;
-
         setDevices(nextDevices);
         setLastUpdatedAt(Date.now());
         setSelectedDeviceId((current) => {
-          if (current && nextDevices.some((device) => device.deviceId === current)) {
-            return current;
-          }
+          if (current && nextDevices.some((d) => d.deviceId === current)) return current;
           return nextDevices[0]?.deviceId ?? null;
         });
         setError(null);
-      } catch (loadError) {
+      } catch (err) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : locale === "vi"
-                ? "Không tải được danh sách thiết bị."
-                : "Failed to load devices."
-          );
+          setError(err instanceof Error ? err.message :
+            locale === "vi" ? "Không tải được danh sách thiết bị." : "Failed to load devices.");
         }
       } finally {
         if (!cancelled) setLoadingDevices(false);
@@ -96,14 +88,11 @@ export function App() {
 
     loadDevices();
     const timer = window.setInterval(loadDevices, REFRESH_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+    return () => { cancelled = true; window.clearInterval(timer); };
   }, [locale]);
 
   const selectedDevice = useMemo(
-    () => devices.find((device) => device.deviceId === selectedDeviceId) ?? null,
+    () => devices.find((d) => d.deviceId === selectedDeviceId) ?? null,
     [devices, selectedDeviceId]
   );
 
@@ -111,24 +100,15 @@ export function App() {
     let cancelled = false;
 
     const loadHistory = async () => {
-      if (!selectedDeviceId) {
-        setHistory([]);
-        return;
-      }
-
+      if (!selectedDeviceId) { setHistory([]); return; }
       try {
         setLoadingHistory(true);
         const points = await fetchHistory(selectedDeviceId, historyRange);
         if (!cancelled) setHistory(points);
-      } catch (loadError) {
+      } catch (err) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : locale === "vi"
-                ? "Không tải được lịch sử."
-                : "Failed to load history."
-          );
+          setError(err instanceof Error ? err.message :
+            locale === "vi" ? "Không tải được lịch sử." : "Failed to load history.");
         }
       } finally {
         if (!cancelled) setLoadingHistory(false);
@@ -136,153 +116,206 @@ export function App() {
     };
 
     loadHistory();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [locale, selectedDeviceId, historyRange]);
 
   const handleRename = async (deviceId: string, nextName: string) => {
     const trimmed = nextName.trim();
     if (!trimmed) return;
-
     const updatedName = await renameDevice(deviceId, trimmed);
-    setDevices((current) =>
-      current.map((device) =>
-        device.deviceId === deviceId ? { ...device, deviceName: updatedName } : device
-      )
+    setDevices((prev) =>
+      prev.map((d) => d.deviceId === deviceId ? { ...d, deviceName: updatedName } : d)
     );
   };
 
+  const onlineCount = devices.filter((d) => d.online).length;
+
   return (
-    <div className="shell">
-      <aside className="shell__sidebar">
-        {/* Brand header */}
-        <div className="brand">
-          <p className="eyebrow">{copy.appEyebrow}</p>
-          <h1>{copy.appTitle}</h1>
-          <p className="muted">{copy.appDescription}</p>
-        </div>
-
-        {/* Locale + Theme controls */}
-        <div className="panel control-panel">
-          <div className="control-group">
-            <span className="detail-label">{copy.languageLabel}</span>
-            <div className="toggle-group">
-              <button
-                className={locale === "en" ? "toggle-button is-active" : "toggle-button"}
-                onClick={() => setLocale("en")}
-                type="button"
-              >
-                {copy.englishLabel}
-              </button>
-              <button
-                className={locale === "vi" ? "toggle-button is-active" : "toggle-button"}
-                onClick={() => setLocale("vi")}
-                type="button"
-              >
-                {copy.vietnameseLabel}
-              </button>
-            </div>
-          </div>
-
-          <div className="control-group">
-            <span className="detail-label">{copy.themeLabel}</span>
-            <div className="toggle-group">
-              <button
-                className={theme === "dark" ? "toggle-button is-active" : "toggle-button"}
-                onClick={() => setTheme("dark")}
-                type="button"
-              >
-                {copy.darkLabel}
-              </button>
-              <button
-                className={theme === "light" ? "toggle-button is-active" : "toggle-button"}
-                onClick={() => setTheme("light")}
-                type="button"
-              >
-                {copy.lightLabel}
-              </button>
-            </div>
+    <>
+      {/* ── TOP NAVBAR ───────────────────────────────────────────────── */}
+      <nav className="navbar">
+        {/* Brand */}
+        <div className="navbar__brand">
+          <div className="navbar__logo">N</div>
+          <div>
+            <div className="navbar__title">NEO10</div>
           </div>
         </div>
 
-        {/* History time range */}
-        <div className="control-group">
-          <span className="detail-label">{copy.movementHistory}</span>
-          <div className="range-picker">
-            {rangeOptions.map((option) => (
-              <button
-                key={option}
-                className={option === historyRange ? "range-pill is-active" : "range-pill"}
-                onClick={() => setHistoryRange(option)}
-                type="button"
-              >
-                {copy.rangeLabels[option]}
-              </button>
-            ))}
-          </div>
+        <div className="navbar__sep" />
+
+        {/* Center nav */}
+        <div className="navbar__center">
+          <button className="navbar__nav-item is-active" type="button">
+            <span>⬡</span>
+            {copy.liveMap}
+          </button>
         </div>
 
-        {/* Device list */}
-        <DeviceSidebar
-          copy={copy}
-          devices={devices}
-          locale={locale}
-          loading={loadingDevices}
-          selectedDeviceId={selectedDeviceId}
-          onSelect={setSelectedDeviceId}
-        />
-        {!loadingDevices && !error && !devices.length ? (
-          <p className="panel-note">{copy.noDevicesHint}</p>
-        ) : null}
-      </aside>
-
-      <main className="shell__main">
-        {/* Hero header */}
-        <section className="hero-card">
-          <div className="hero-card__top">
-            <div>
-              <p className="eyebrow">{copy.liveMap}</p>
-              <h2>{copy.liveMapTitle}</h2>
+        {/* Right controls */}
+        <div className="navbar__right">
+          {lastUpdatedAt ? (
+            <div className="refresh-badge">
+              <span className="refresh-badge__dot" />
+              {formatTimestamp(lastUpdatedAt, locale)}
             </div>
-            {lastUpdatedAt ? (
-              <div className="hero-meta">
-                <span className="hero-meta__pill">
-                  {copy.lastUpdated}: {formatTimestamp(lastUpdatedAt, locale)}
-                </span>
+          ) : null}
+
+          {/* Language toggle */}
+          <div className="toggle-group" style={{ width: "auto" }}>
+            <button
+              className={locale === "vi" ? "toggle-button is-active" : "toggle-button"}
+              onClick={() => setLocale("vi")}
+              type="button"
+              title={copy.vietnameseLabel}
+            >VI</button>
+            <button
+              className={locale === "en" ? "toggle-button is-active" : "toggle-button"}
+              onClick={() => setLocale("en")}
+              type="button"
+              title={copy.englishLabel}
+            >EN</button>
+          </div>
+
+          {/* Theme toggle */}
+          <button
+            className="icon-btn"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            type="button"
+            title={theme === "dark" ? copy.lightLabel : copy.darkLabel}
+          >
+            {theme === "dark" ? "☀" : "◑"}
+          </button>
+        </div>
+      </nav>
+
+      {/* ── SHELL ────────────────────────────────────────────────────── */}
+      <div className="shell">
+
+        {/* SIDEBAR */}
+        <aside className="shell__sidebar">
+
+          {/* Fleet overview */}
+          <div className="sidebar-section">
+            <div className="sidebar-label">{copy.appEyebrow}</div>
+            <div className="panel" style={{ padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: "1.65rem", fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 1 }}>
+                    {devices.length}
+                  </div>
+                  <div className="muted" style={{ marginTop: 2 }}>{copy.appDescription.split(",")[0]}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{
+                    fontSize: "1.2rem", fontWeight: 800, color: "var(--cyan-400)",
+                    lineHeight: 1, letterSpacing: "-0.04em"
+                  }}>{onlineCount}</div>
+                  <div className="muted" style={{ marginTop: 2 }}>{copy.online}</div>
+                </div>
               </div>
+            </div>
+          </div>
+
+          <div className="divider" />
+
+          {/* Time range */}
+          <div className="sidebar-section">
+            <div className="sidebar-label">{copy.movementHistory}</div>
+            <div className="range-picker">
+              {rangeOptions.map((opt) => (
+                <button
+                  key={opt}
+                  className={opt === historyRange ? "range-pill is-active" : "range-pill"}
+                  onClick={() => setHistoryRange(opt)}
+                  type="button"
+                >
+                  {copy.rangeLabels[opt]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="divider" />
+
+          {/* Device list */}
+          <div className="sidebar-section" style={{ flex: 1 }}>
+            <div className="sidebar-label">
+              {copy.selectedDevice} ({devices.length})
+            </div>
+            <DeviceSidebar
+              copy={copy}
+              devices={devices}
+              locale={locale}
+              loading={loadingDevices}
+              selectedDeviceId={selectedDeviceId}
+              onSelect={setSelectedDeviceId}
+            />
+            {!loadingDevices && !error && !devices.length ? (
+              <p className="panel-note">{copy.noDevicesHint}</p>
             ) : null}
           </div>
-          <p className="muted">{copy.liveMapDescription}</p>
-        </section>
 
-        {error ? <div className="error-banner">{error}</div> : null}
+        </aside>
 
-        <div className="dashboard-grid">
-          <TrackerMap
-            devices={devices}
-            history={history}
-            homeLabel={copy.homeLabel}
-            selectedDeviceId={selectedDeviceId}
-            theme={theme}
-          />
-          <div className="dashboard-stack">
-            <DeviceDetails
-              copy={copy}
-              device={selectedDevice}
-              loading={loadingDevices}
-              onRename={handleRename}
+        {/* MAIN */}
+        <main className="shell__main">
+
+          {/* Hero header */}
+          <section className="hero-card">
+            <div className="hero-card__top">
+              <div>
+                <p className="eyebrow">{copy.liveMap}</p>
+                <h2>{copy.liveMapTitle}</h2>
+                <p className="muted" style={{ marginTop: 6 }}>{copy.liveMapDescription}</p>
+              </div>
+              {lastUpdatedAt || devices.length ? (
+                <div className="hero-meta">
+                  {devices.length > 0 && (
+                    <span className="stat-badge">
+                      ◉ {onlineCount}/{devices.length} {copy.online}
+                    </span>
+                  )}
+                  {lastUpdatedAt && (
+                    <span className="hero-meta__pill">
+                      ↻ {copy.lastUpdated}: {formatTimestamp(lastUpdatedAt, locale)}
+                    </span>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          {error ? <div className="error-banner">{error}</div> : null}
+
+          {/* Dashboard grid */}
+          <div className="dashboard-grid">
+            <TrackerMap
+              devices={devices}
+              history={history}
+              homeLabel={copy.homeLabel}
+              selectedDeviceId={selectedDeviceId}
+              theme={theme}
             />
-            <HistoryTimeline
-              copy={copy}
-              locale={locale}
-              points={history}
-              loading={loadingHistory}
-              selectedDeviceName={selectedDevice?.deviceName ?? null}
-            />
+            <div className="dashboard-stack">
+              <DeviceDetails
+                copy={copy}
+                device={selectedDevice}
+                loading={loadingDevices}
+                onRename={handleRename}
+              />
+              <HistoryTimeline
+                copy={copy}
+                locale={locale}
+                points={history}
+                loading={loadingHistory}
+                selectedDeviceName={selectedDevice?.deviceName ?? null}
+              />
+            </div>
           </div>
-        </div>
-      </main>
-    </div>
+
+        </main>
+      </div>
+    </>
   );
 }
