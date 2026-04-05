@@ -17,6 +17,8 @@ constexpr size_t CONFIG_ASSIST_CHIPCODE_LEN = 64;
 constexpr size_t CONFIG_ASSIST_TOKEN_LEN = 128;
 constexpr size_t TELEMETRY_STATUS_LEN = 32;
 constexpr size_t CONFIG_NETLOC_KEY_LEN = 64;
+constexpr size_t CONFIG_DEVICE_ID_LEN = 48;
+constexpr size_t CONFIG_DEVICE_NAME_LEN = 64;
 
 // ============================================================
 // Location source priority (higher = better)
@@ -47,6 +49,8 @@ struct BestLocationResult {
 BestLocationResult getBestAvailableLocation();
 
 struct ConfigSnapshot {
+  char deviceId[CONFIG_DEVICE_ID_LEN];
+  char deviceName[CONFIG_DEVICE_NAME_LEN];
   char call1[CONFIG_PHONE_LEN];
   char call2[CONFIG_PHONE_LEN];
   char call3[CONFIG_PHONE_LEN];
@@ -126,6 +130,8 @@ extern double GPS_LNG;
 extern String GPS_LINK;
 extern bool GPS_READY;
 extern bool ASSIST_READY;
+extern char TRACKER_DEVICE_ID[CONFIG_DEVICE_ID_LEN];
+extern char TRACKER_DEVICE_NAME[CONFIG_DEVICE_NAME_LEN];
 
 // --- Multi-phone config (NVS) ---
 extern char CALL_1[37];

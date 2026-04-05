@@ -5,3 +5,6 @@
 .vscode/ipch
 /.pio/build
 /.vscode
+/webtool/node_modules
+/webtool/dist
+/.tools

@@ -7,8 +7,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
-#define DEVICE_ID "TRACKER_KV"
-#define SERVER_URL "https://gps-tracker.thanhvu220809.workers.dev/update"
+#define SERVER_URL "https://gps-tracker.ahcntab.workers.dev/update"
 
 static unsigned long lastSendMS = 0;
 
@@ -22,6 +21,17 @@ static bool isValidCoordPair(double lat, double lng) {
   if (lat == 0.0 && lng == 0.0)
     return false;
   return true;
+}
+
+static void appendJsonString(String &json, const String &value) {
+  json += '"';
+  for (size_t i = 0; i < value.length(); ++i) {
+    const char ch = value[i];
+    if (ch == '"' || ch == '\\')
+      json += '\\';
+    json += ch;
+  }
+  json += '"';
 }
 
 static void appendGeoFields(String &json, double currentLat, double currentLng,
@@ -71,21 +81,30 @@ static void appendGeoFields(String &json, double currentLat, double currentLng,
 static String buildTrackingPayload(double lat, double lng, bool isTest,
                                    const ConfigSnapshot &cfg,
                                    const BestLocationResult &loc) {
-  String json = "{\"id\":\"" + String(DEVICE_ID) +
-                "\","
-                "\"lat\":" +
-                String(lat, 6) +
-                ","
-                "\"lng\":" +
-                String(lng, 6);
+  int satellites = gps.satellites.isValid() ? gps.satellites.value() : 0;
+  float speedKmph = gps.speed.isValid() ? gps.speed.kmph() : 0.0f;
 
-  json += ",\"locSource\":\"";
-  json += locationSourceName(loc.source);
-  json += "\"";
+  String json = "{\"id\":";
+  appendJsonString(json, String(cfg.deviceId));
+  json += ",\"deviceId\":";
+  appendJsonString(json, String(cfg.deviceId));
+  json += ",\"deviceName\":";
+  appendJsonString(json, String(cfg.deviceName));
+  json += ",\"lat\":";
+  json += String(lat, 6);
+  json += ",\"lng\":";
+  json += String(lng, 6);
+
+  json += ",\"locSource\":";
+  appendJsonString(json, String(locationSourceName(loc.source)));
   json += ",\"locAccuracyM\":";
   json += String(loc.accuracyM, 1);
   json += ",\"locAgeMs\":";
   json += String(loc.ageMs);
+  json += ",\"satellites\":";
+  json += String(satellites);
+  json += ",\"speedKmph\":";
+  json += String(speedKmph, 1);
 
   appendGeoFields(json, lat, lng, cfg);
 
@@ -121,7 +140,8 @@ static bool sendViaWiFi(const String &json) {
   if (code >= 200 && code < 300) {
     logPrintf("[TRACK] WiFi OK (%d)", code);
   } else {
-    logPrintf("[TRACK] WiFi fail: %d %s", code, http.errorToString(code).c_str());
+    logPrintf("[TRACK] WiFi fail: %d %s", code,
+              http.errorToString(code).c_str());
   }
   http.end();
   return (code >= 200 && code < 300);

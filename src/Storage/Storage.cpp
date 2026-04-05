@@ -1,6 +1,15 @@
 #include "Storage.h"
 #include <Arduino.h>
 
+static void buildDefaultDeviceIdentity(char *deviceId, size_t deviceIdLen,
+                                       char *deviceName,
+                                       size_t deviceNameLen) {
+  uint64_t mac = ESP.getEfuseMac();
+  uint32_t suffix = static_cast<uint32_t>(mac & 0xFFFFFF);
+  snprintf(deviceId, deviceIdLen, "tracker-%06lX", (unsigned long)suffix);
+  snprintf(deviceName, deviceNameLen, "Tracker %06lX", (unsigned long)suffix);
+}
+
 // ============================================================
 // NVS helpers
 // ============================================================
@@ -57,8 +66,15 @@ void initStorage() {
 static void handleFirstRun() {
   uint8_t ran = 0;
   if (nvs_get_u8(nvsHandle, "FIRST_RUN", &ran) != ESP_OK) {
+    char defaultDeviceId[CONFIG_DEVICE_ID_LEN] = {0};
+    char defaultDeviceName[CONFIG_DEVICE_NAME_LEN] = {0};
+    buildDefaultDeviceIdentity(defaultDeviceId, sizeof(defaultDeviceId),
+                               defaultDeviceName, sizeof(defaultDeviceName));
+
     // First boot ever — seed default chipcode
     nvs_set_str(nvsHandle, "CHIPCODE", "RkNGNDM1MEUzNTU0OjUzRUVENjI0");
+    nvs_set_str(nvsHandle, "DEV_ID", defaultDeviceId);
+    nvs_set_str(nvsHandle, "DEV_NAME", defaultDeviceName);
     nvs_set_u8(nvsHandle, "FIRST_RUN", 1);
     nvs_commit(nvsHandle);
     logLine("[STORAGE] First run: seeded default CHIPCODE");
@@ -88,6 +104,15 @@ void loadDataFromRom() {
 
   // First-run seeds (only once, ever)
   handleFirstRun();
+
+  char defaultDeviceId[CONFIG_DEVICE_ID_LEN] = {0};
+  char defaultDeviceName[CONFIG_DEVICE_NAME_LEN] = {0};
+  buildDefaultDeviceIdentity(defaultDeviceId, sizeof(defaultDeviceId),
+                             defaultDeviceName, sizeof(defaultDeviceName));
+
+  nvsReadStr("DEV_ID", cfg.deviceId, sizeof(cfg.deviceId), defaultDeviceId);
+  nvsReadStr("DEV_NAME", cfg.deviceName, sizeof(cfg.deviceName),
+             defaultDeviceName);
 
   // Phone numbers
   nvsReadStr("CALL_1", cfg.call1, sizeof(cfg.call1), DEFAULT_PHONE);
@@ -141,6 +166,8 @@ void saveAllConfig() {
   nvs_set_str(nvsHandle, "CALL_1", cfg.call1);
   nvs_set_str(nvsHandle, "CALL_2", cfg.call2);
   nvs_set_str(nvsHandle, "CALL_3", cfg.call3);
+  nvs_set_str(nvsHandle, "DEV_ID", cfg.deviceId);
+  nvs_set_str(nvsHandle, "DEV_NAME", cfg.deviceName);
   nvs_set_str(nvsHandle, "HOTLINE", cfg.hotline);
   nvs_set_i32(nvsHandle, "RING_SEC", cfg.ringSeconds);
   nvs_set_str(nvsHandle, "SMS_TPL", cfg.smsTemplate);

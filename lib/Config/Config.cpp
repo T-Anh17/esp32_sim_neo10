@@ -11,6 +11,8 @@ double GPS_LNG = 0.0;
 String GPS_LINK = "";
 bool GPS_READY = false;
 bool ASSIST_READY = false;
+char TRACKER_DEVICE_ID[CONFIG_DEVICE_ID_LEN] = "TRACKER_KV";
+char TRACKER_DEVICE_NAME[CONFIG_DEVICE_NAME_LEN] = "ESP32 Tracker";
 
 char CALL_1[37] = "";
 char CALL_2[37] = "";
@@ -104,6 +106,10 @@ void getConfigSnapshot(ConfigSnapshot *out) {
     return;
 
   lockConfig();
+  strncpy(out->deviceId, TRACKER_DEVICE_ID, sizeof(out->deviceId) - 1);
+  out->deviceId[sizeof(out->deviceId) - 1] = '\0';
+  strncpy(out->deviceName, TRACKER_DEVICE_NAME, sizeof(out->deviceName) - 1);
+  out->deviceName[sizeof(out->deviceName) - 1] = '\0';
   strncpy(out->call1, CALL_1, sizeof(out->call1) - 1);
   out->call1[sizeof(out->call1) - 1] = '\0';
   strncpy(out->call2, CALL_2, sizeof(out->call2) - 1);
@@ -142,6 +148,11 @@ void applyConfigSnapshot(const ConfigSnapshot *snapshot) {
     return;
 
   lockConfig();
+  strncpy(TRACKER_DEVICE_ID, snapshot->deviceId, sizeof(TRACKER_DEVICE_ID) - 1);
+  TRACKER_DEVICE_ID[sizeof(TRACKER_DEVICE_ID) - 1] = '\0';
+  strncpy(TRACKER_DEVICE_NAME, snapshot->deviceName,
+          sizeof(TRACKER_DEVICE_NAME) - 1);
+  TRACKER_DEVICE_NAME[sizeof(TRACKER_DEVICE_NAME) - 1] = '\0';
   strncpy(CALL_1, snapshot->call1, sizeof(CALL_1) - 1);
   CALL_1[sizeof(CALL_1) - 1] = '\0';
   strncpy(CALL_2, snapshot->call2, sizeof(CALL_2) - 1);
