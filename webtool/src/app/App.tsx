@@ -54,7 +54,7 @@ export function App() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
 
   // Map & Home feature state
-  const [showHistory, setShowHistory] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   const [routeMode, setRouteMode] = useState<"off" | "selected" | "all">("off");
   const [pickMode, setPickMode] = useState<HomePickMode>("idle");
   const [pendingPick, setPendingPick] = useState<{ lat: number; lng: number } | null>(null);
@@ -150,6 +150,9 @@ export function App() {
 
   /** When home is saved, update local device state optimistically */
   const handleHomeSaved = (homeLat: number, homeLng: number, distanceToHomeM: number) => {
+    setPendingPick(null);
+    setDraftHome(null);
+    setPickMode("idle");
     setDevices((prev) =>
       prev.map((d) =>
         d.deviceId === selectedDeviceId
@@ -161,16 +164,41 @@ export function App() {
 
   /** When home is cleared */
   const handleHomeCleared = () => {
+    setPendingPick(null);
+    setDraftHome(null);
+    setPickMode("idle");
     setDevices((prev) =>
       prev.map((d) =>
         d.deviceId === selectedDeviceId
-          ? { ...d, homeSet: false, homeLat: undefined, homeLng: undefined, distanceToHomeM: -1, geoEnabled: false }
+          ? {
+              ...d,
+              homeSet: false,
+              homeLat: undefined,
+              homeLng: undefined,
+              distanceToHomeM: -1,
+              geoEnabled: false,
+              geoRadiusM: 0,
+              insideGeofence: false,
+            }
           : d
       )
     );
   };
 
   const onlineCount = devices.filter((d) => d.online).length;
+  const visibleDraftHome = useMemo(() => {
+    if (!draftHome) return null;
+    if (
+      selectedDevice?.homeSet &&
+      typeof selectedDevice.homeLat === "number" &&
+      typeof selectedDevice.homeLng === "number"
+    ) {
+      const sameLat = Math.abs(selectedDevice.homeLat - draftHome.lat) < 0.000001;
+      const sameLng = Math.abs(selectedDevice.homeLng - draftHome.lng) < 0.000001;
+      if (sameLat && sameLng) return null;
+    }
+    return draftHome;
+  }, [draftHome, selectedDevice]);
 
   return (
     <>
@@ -282,7 +310,7 @@ export function App() {
           {/* Footer Credits */}
           <div className="sidebar-footer">
             <p>© {new Date().getFullYear()} <strong>Vũ Đăng Thanh</strong>. All rights reserved.</p>
-            <p>Leader: <strong>TA DIY</strong></p>
+            <p>Leader: <strong>TA DIY SOLUTION</strong></p>
           </div>
 
         </aside>
@@ -354,12 +382,13 @@ export function App() {
               devices={devices}
               history={history}
               homeLabel={copy.homeLabel}
+              draftPendingLabel={locale === "vi" ? "Ch\u1edd l\u01b0u" : "Pending save"}
               selectedDeviceId={selectedDeviceId}
               theme={theme}
               pickMode={pickMode}
               routeMode={routeMode}
               showHistory={showHistory}
-              draftHome={draftHome}
+              draftHome={visibleDraftHome}
               onMapClick={handleMapClick}
             />
 

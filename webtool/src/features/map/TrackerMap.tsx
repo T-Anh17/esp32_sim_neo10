@@ -1,4 +1,6 @@
 import "leaflet/dist/leaflet.css";
+import { divIcon } from "leaflet";
+import { useEffect, useMemo, useState } from "react";
 import { useMapEvents } from "react-leaflet";
 import {
   Circle,
@@ -9,7 +11,6 @@ import {
   TileLayer,
   Tooltip,
 } from "react-leaflet";
-import { divIcon } from "leaflet";
 import type { ThemeMode } from "../../i18n";
 import type { TrackerDeviceSummary, TrackerHistoryPoint } from "../../types/tracker";
 import type { HomePickMode } from "../home/HomePanel";
@@ -20,6 +21,7 @@ type TrackerMapProps = {
   devices: TrackerDeviceSummary[];
   history: TrackerHistoryPoint[];
   homeLabel: string;
+  draftPendingLabel: string;
   selectedDeviceId: string | null;
   theme: ThemeMode;
   pickMode: HomePickMode;
@@ -29,14 +31,44 @@ type TrackerMapProps = {
   onMapClick?: (lat: number, lng: number) => void;
 };
 
+type RouteRequest = {
+  deviceId: string;
+  deviceName: string;
+  selected: boolean;
+  startLat: number;
+  startLng: number;
+  endLat: number;
+  endLng: number;
+};
+
+type RoadRoute = {
+  deviceId: string;
+  deviceName: string;
+  selected: boolean;
+  positions: [number, number][];
+  distanceM: number;
+  durationS: number;
+  source: "osrm" | "fallback";
+};
+
+type CachedRoute = {
+  positions: [number, number][];
+  distanceM: number;
+  durationS: number;
+  source: "osrm" | "fallback";
+};
+
 const draftIcon = divIcon({
-  html: '<div style="font-size: 32px; filter: drop-shadow(0px 3px 4px rgba(0,0,0,0.6)); line-height: 1; transform: translate(-50%, -100%);">📍</div>',
+  html: '<div class="draft-pin__glyph">&#128205;</div>',
   className: "draft-pin",
-  iconSize: [0, 0],
-  iconAnchor: [0, 0],
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  tooltipAnchor: [0, -28],
 });
 
 const DEFAULT_CENTER: [number, number] = [10.901146, 106.806184];
+const OSRM_BASE = "https://router.project-osrm.org";
+const roadRouteCache = new Map<string, CachedRoute>();
 
 function isValidPair(lat?: number | null, lng?: number | null): lat is number {
   return (
@@ -47,7 +79,102 @@ function isValidPair(lat?: number | null, lng?: number | null): lat is number {
   );
 }
 
-/** Invisible component that listens for map clicks during pick mode */
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistance(distanceM: number): string {
+  if (distanceM >= 1000) return `${(distanceM / 1000).toFixed(2)} km`;
+  return `${Math.round(distanceM)} m`;
+}
+
+function formatDuration(durationS: number): string {
+  if (durationS < 60) return `${Math.max(1, Math.round(durationS))} s`;
+  if (durationS < 3600) return `${Math.round(durationS / 60)} min`;
+  return `${(durationS / 3600).toFixed(1)} h`;
+}
+
+function buildRouteKey(request: RouteRequest): string {
+  return [
+    request.deviceId,
+    request.startLat.toFixed(6),
+    request.startLng.toFixed(6),
+    request.endLat.toFixed(6),
+    request.endLng.toFixed(6),
+  ].join(":");
+}
+
+function fallbackRoute(request: RouteRequest): CachedRoute {
+  return {
+    positions: [
+      [request.startLat, request.startLng],
+      [request.endLat, request.endLng],
+    ],
+    distanceM: haversineM(
+      request.startLat,
+      request.startLng,
+      request.endLat,
+      request.endLng
+    ),
+    durationS: 0,
+    source: "fallback",
+  };
+}
+
+async function fetchRoadRoute(
+  request: RouteRequest,
+  signal: AbortSignal
+): Promise<CachedRoute> {
+  const key = buildRouteKey(request);
+  const cached = roadRouteCache.get(key);
+  if (cached) return cached;
+
+  const url =
+    `${OSRM_BASE}/route/v1/driving/` +
+    `${request.startLng},${request.startLat};${request.endLng},${request.endLat}` +
+    `?overview=full&geometries=geojson&steps=false`;
+
+  try {
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw new Error(`OSRM ${response.status}`);
+
+    const data = (await response.json()) as {
+      code?: string;
+      routes?: Array<{
+        distance?: number;
+        duration?: number;
+        geometry?: { coordinates?: [number, number][] };
+      }>;
+    };
+
+    const route = data.routes?.[0];
+    const coords = route?.geometry?.coordinates;
+    if (data.code !== "Ok" || !route || !coords || coords.length < 2) {
+      throw new Error(data.code || "NoRoute");
+    }
+
+    const mapped: CachedRoute = {
+      positions: coords.map(([lng, lat]) => [lat, lng]),
+      distanceM: route.distance ?? 0,
+      durationS: route.duration ?? 0,
+      source: "osrm",
+    };
+    roadRouteCache.set(key, mapped);
+    return mapped;
+  } catch {
+    const fallback = fallbackRoute(request);
+    roadRouteCache.set(key, fallback);
+    return fallback;
+  }
+}
+
 function MapClickListener({
   active,
   onMapClick,
@@ -67,6 +194,7 @@ export function TrackerMap({
   devices,
   history,
   homeLabel,
+  draftPendingLabel,
   selectedDeviceId,
   theme,
   pickMode,
@@ -75,12 +203,10 @@ export function TrackerMap({
   draftHome,
   onMapClick,
 }: TrackerMapProps) {
-  const visibleDevices = devices.filter(
-    (d) => isValidPair(d.lat, d.lng)
-  );
-  const visibleHistory = history.filter(
-    (p) => isValidPair(p.lat, p.lng)
-  );
+  const [roadRoutes, setRoadRoutes] = useState<RoadRoute[]>([]);
+
+  const visibleDevices = devices.filter((d) => isValidPair(d.lat, d.lng));
+  const visibleHistory = history.filter((p) => isValidPair(p.lat, p.lng));
   const selectedDevice =
     visibleDevices.find((d) => d.deviceId === selectedDeviceId) ?? null;
 
@@ -95,11 +221,55 @@ export function TrackerMap({
       ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
       : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
-  // Route-to-home lines
-  const visibleRoutes = visibleDevices.filter(d => 
-    d.homeSet && isValidPair(d.homeLat, d.homeLng) && 
-    (routeMode === "all" || (routeMode === "selected" && d.deviceId === selectedDeviceId))
-  );
+  const routeRequests = useMemo<RouteRequest[]>(() => {
+    if (routeMode === "off") return [];
+
+    return visibleDevices
+      .filter(
+        (device) =>
+          isValidPair(device.homeLat, device.homeLng) &&
+          device.homeSet &&
+          (routeMode === "all" || device.deviceId === selectedDeviceId)
+      )
+      .map((device) => ({
+        deviceId: device.deviceId,
+        deviceName: device.deviceName,
+        selected: device.deviceId === selectedDeviceId,
+        startLat: device.lat,
+        startLng: device.lng,
+        endLat: device.homeLat!,
+        endLng: device.homeLng!,
+      }));
+  }, [routeMode, selectedDeviceId, visibleDevices]);
+
+  useEffect(() => {
+    if (!routeRequests.length) {
+      setRoadRoutes([]);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    Promise.all(
+      routeRequests.map(async (request) => {
+        const route = await fetchRoadRoute(request, controller.signal);
+        return {
+          deviceId: request.deviceId,
+          deviceName: request.deviceName,
+          selected: request.selected,
+          ...route,
+        } satisfies RoadRoute;
+      })
+    )
+      .then((routes) => {
+        if (!controller.signal.aborted) setRoadRoutes(routes);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRoadRoutes([]);
+      });
+
+    return () => controller.abort();
+  }, [routeRequests]);
 
   return (
     <section
@@ -120,13 +290,11 @@ export function TrackerMap({
           url={tileUrl}
         />
 
-        {/* Map click handler for home picking */}
         <MapClickListener
           active={pickMode === "picking"}
           onMapClick={onMapClick ?? (() => {})}
         />
 
-        {/* Device markers */}
         {visibleDevices.map((device) => (
           <CircleMarker
             key={device.deviceId}
@@ -148,11 +316,10 @@ export function TrackerMap({
           </CircleMarker>
         ))}
 
-        {/* History trail (only when showHistory is true) */}
         {showHistory && visibleHistory.length > 1 && (
           <Polyline
             positions={visibleHistory.map((p) => [p.lat, p.lng])}
-            pathOptions={{ color: "#6366f1", weight: 3.5, opacity: 0.75, dashArray: undefined }}
+            pathOptions={{ color: "#6366f1", weight: 3.5, opacity: 0.75 }}
           />
         )}
 
@@ -171,24 +338,27 @@ export function TrackerMap({
             />
           ))}
 
-        {/* Route-to-home lines (dashed) */}
-        {visibleRoutes.map((d) => (
+        {roadRoutes.map((route) => (
           <Polyline
-            key={`route-${d.deviceId}`}
-            positions={[
-              [d.lat, d.lng],
-              [d.homeLat!, d.homeLng!],
-            ]}
+            key={`route-${route.deviceId}`}
+            positions={route.positions}
             pathOptions={{
-              color: d.deviceId === selectedDeviceId ? "#facc15" : "#94a3b8",
-              weight: d.deviceId === selectedDeviceId ? 2.5 : 1.5,
-              opacity: d.deviceId === selectedDeviceId ? 0.9 : 0.6,
-              dashArray: d.deviceId === selectedDeviceId ? "8 6" : "4 4",
+              color: route.selected ? "#facc15" : "#94a3b8",
+              weight: route.selected ? 4 : 2.5,
+              opacity: route.selected ? 0.95 : 0.72,
+              dashArray: route.source === "fallback" ? "8 6" : undefined,
             }}
-          />
+          >
+            <Tooltip direction="top" sticky>
+              <div>
+                <strong>{route.deviceName}</strong>
+                <div>{formatDistance(route.distanceM)}</div>
+                <div>{route.durationS > 0 ? formatDuration(route.durationS) : "Fallback line"}</div>
+              </div>
+            </Tooltip>
+          </Polyline>
         ))}
 
-        {/* Home marker + geofence circle for selected device */}
         {selectedDevice?.homeSet && isValidPair(selectedDevice.homeLat, selectedDevice.homeLng) && (
           <>
             <CircleMarker
@@ -201,9 +371,7 @@ export function TrackerMap({
                 weight: 2,
               }}
             >
-              <Tooltip direction="top" permanent={false}>
-                🏠 {homeLabel}
-              </Tooltip>
+              <Tooltip direction="top">{homeLabel}</Tooltip>
             </CircleMarker>
 
             {selectedDevice.geoEnabled && (selectedDevice.geoRadiusM ?? 0) > 0 && (
@@ -222,7 +390,6 @@ export function TrackerMap({
           </>
         )}
 
-        {/* All other devices' home markers (faint) */}
         {visibleDevices
           .filter(
             (d) =>
@@ -242,15 +409,19 @@ export function TrackerMap({
                 weight: 1,
               }}
             >
-              <Tooltip direction="top">🏠 {d.deviceName}</Tooltip>
+              <Tooltip direction="top">{d.deviceName}</Tooltip>
             </CircleMarker>
           ))}
 
-        {/* Draft pick home marker */}
         {draftHome && (
-          <Marker position={[draftHome.lat, draftHome.lng]} icon={draftIcon}>
-            <Tooltip direction="top" permanent>
-              {homeLabel} (Chờ lưu)
+          <Marker position={[draftHome.lat, draftHome.lng]} icon={draftIcon} zIndexOffset={1000}>
+            <Tooltip
+              direction="top"
+              permanent
+              offset={[0, -28]}
+              className="draft-home-tooltip"
+            >
+              {homeLabel} ({draftPendingLabel})
             </Tooltip>
           </Marker>
         )}

@@ -948,6 +948,34 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
 ════════════════════════════════════════════════════════════════════ */
 .history-panel { flex: 1; }
 
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.history-summary__card {
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-dim);
+  background: var(--surface-input);
+}
+
+.history-summary__label {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-300);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.history-summary__value {
+  font-size: 0.95rem;
+  color: var(--text-100);
+}
+
 .history-count {
   display: inline-flex;
   align-items: center;
@@ -1029,6 +1057,77 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
   position: relative;
   z-index: 1;
   flex-shrink: 0;
+}
+
+.history-item__body {
+  min-width: 0;
+}
+
+.history-item__topline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-item__age {
+  font-size: 0.68rem;
+  color: var(--text-400);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.history-item__headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.history-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--blue-200);
+  background: rgba(37, 99, 235, 0.14);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+}
+
+.history-item__summary {
+  font-size: 0.78rem;
+  color: var(--text-200);
+  line-height: 1.5;
+}
+
+.history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.history-meta__pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: var(--text-300);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-dim);
+}
+
+.history-item__coords {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-400);
+  margin-top: 8px;
+  word-break: break-all;
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -1232,6 +1331,7 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
 .pick-hint {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 12px;
   border-radius: var(--r-md);
@@ -1266,10 +1366,27 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
 
 .pick-cancel-btn:hover { color: var(--text-100); }
 
+.draft-pin {
+  background: transparent;
+  border: none;
+}
+
+.draft-pin__glyph {
+  font-size: 32px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.6));
+}
+
+.draft-home-tooltip {
+  white-space: nowrap;
+  font-weight: 700;
+}
+
 /* Full-width floating pick-mode bar (above map) */
 .pick-mode-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 10px 16px;
   border-radius: var(--r-md);
@@ -1279,6 +1396,8 @@ button:disabled { cursor: not-allowed; opacity: 0.4; }
   font-size: 0.83rem;
   font-weight: 500;
   animation: fade-slide-in 200ms ease;
+  position: relative;
+  z-index: 2;
 }
 
 @keyframes fade-slide-in {

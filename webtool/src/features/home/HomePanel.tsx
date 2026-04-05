@@ -136,7 +136,7 @@ export function HomePanel({
     try {
       const geoR = parseFloat(geoRadius) || 0;
       const result = await setDeviceHome(
-        device.deviceId,
+        device,
         parsedLat,
         parsedLng,
         geoR > 0 ? geoR : undefined
@@ -153,7 +153,7 @@ export function HomePanel({
   const handleClear = async () => {
     setStatus("saving");
     try {
-      await clearDeviceHome(device.deviceId);
+      await clearDeviceHome(device);
       onHomeCleared();
       setLatStr("");
       setLngStr("");

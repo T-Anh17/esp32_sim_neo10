@@ -117,21 +117,121 @@ type HomeResponse = {
   distanceToHomeM: number;
 };
 
-export async function setDeviceHome(
-  deviceId: string,
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function saveHomeViaLegacyUpdate(
+  device: TrackerDeviceSummary,
   homeLat: number,
   homeLng: number,
   geoRadiusM?: number,
 ): Promise<HomeResponse> {
-  return requestJson<HomeResponse>("/api/device/home", {
+  const distanceToHomeM = Math.round(haversineM(device.lat, device.lng, homeLat, homeLng));
+  await requestJson<{ ok?: boolean }>("/update", {
     method: "POST",
-    body: JSON.stringify({ deviceId, homeLat, homeLng, geoRadiusM }),
+    body: JSON.stringify({
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      lat: device.lat,
+      lng: device.lng,
+      timestamp: device.timestamp,
+      homeSet: true,
+      homeLat,
+      homeLng,
+      geoEnabled: typeof geoRadiusM === "number" && geoRadiusM > 0,
+      geoRadiusM: geoRadiusM ?? device.geoRadiusM ?? 0,
+      distanceToHomeM,
+      insideGeofence:
+        typeof geoRadiusM === "number" && geoRadiusM > 0
+          ? distanceToHomeM <= geoRadiusM
+          : false,
+      satellites: device.satellites,
+      speedKmph: device.speedKmph,
+      locSource: device.locSource,
+      locAccuracyM: device.locAccuracyM,
+    }),
   });
+
+  return {
+    ok: true,
+    deviceId: device.deviceId,
+    homeSet: true,
+    homeLat,
+    homeLng,
+    distanceToHomeM,
+  };
 }
 
-export async function clearDeviceHome(deviceId: string): Promise<HomeResponse> {
-  return requestJson<HomeResponse>("/api/device/home", {
+async function clearHomeViaLegacyUpdate(device: TrackerDeviceSummary): Promise<HomeResponse> {
+  await requestJson<{ ok?: boolean }>("/update", {
     method: "POST",
-    body: JSON.stringify({ deviceId, clear: true }),
+    body: JSON.stringify({
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      lat: device.lat,
+      lng: device.lng,
+      timestamp: device.timestamp,
+      homeSet: false,
+      geoEnabled: false,
+      geoRadiusM: 0,
+      distanceToHomeM: -1,
+      insideGeofence: false,
+      satellites: device.satellites,
+      speedKmph: device.speedKmph,
+      locSource: device.locSource,
+      locAccuracyM: device.locAccuracyM,
+    }),
   });
+
+  return {
+    ok: true,
+    deviceId: device.deviceId,
+    homeSet: false,
+    homeLat: null,
+    homeLng: null,
+    distanceToHomeM: -1,
+  };
+}
+
+export async function setDeviceHome(
+  device: TrackerDeviceSummary,
+  homeLat: number,
+  homeLng: number,
+  geoRadiusM?: number,
+): Promise<HomeResponse> {
+  try {
+    return await requestJson<HomeResponse>("/api/device/home", {
+      method: "POST",
+      body: JSON.stringify({ deviceId: device.deviceId, homeLat, homeLng, geoRadiusM }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/not found/i.test(message)) {
+      return saveHomeViaLegacyUpdate(device, homeLat, homeLng, geoRadiusM);
+    }
+    throw error;
+  }
+}
+
+export async function clearDeviceHome(device: TrackerDeviceSummary): Promise<HomeResponse> {
+  try {
+    return await requestJson<HomeResponse>("/api/device/home", {
+      method: "POST",
+      body: JSON.stringify({ deviceId: device.deviceId, clear: true }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/not found/i.test(message)) {
+      return clearHomeViaLegacyUpdate(device);
+    }
+    throw error;
+  }
 }

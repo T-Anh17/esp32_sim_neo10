@@ -62,6 +62,61 @@ function isValidCoordPair(lat, lng) {
     );
 }
 
+function applyHomeOverride(snapshot, meta) {
+    if (!snapshot) return snapshot;
+
+    const override = meta?.homeOverride;
+    if (!override || typeof override !== "object") return snapshot;
+
+    const next = { ...snapshot };
+    const mode = normalizeString(override.mode);
+
+    if (mode === "cleared") {
+        next.homeSet = false;
+        delete next.homeLat;
+        delete next.homeLng;
+        next.geoEnabled = false;
+        next.geoRadiusM = 0;
+        next.distanceToHomeM = -1;
+        next.insideGeofence = false;
+        return next;
+    }
+
+    if (mode === "custom") {
+        const homeLat = normalizeNumber(override.homeLat);
+        const homeLng = normalizeNumber(override.homeLng);
+        if (!isValidCoordPair(homeLat, homeLng)) return next;
+
+        next.homeSet = true;
+        next.homeLat = homeLat;
+        next.homeLng = homeLng;
+
+        const geoRadiusM = normalizeNumber(override.geoRadiusM);
+        next.geoRadiusM = geoRadiusM !== null && geoRadiusM > 0 ? geoRadiusM : 0;
+        next.geoEnabled = next.geoRadiusM > 0;
+
+        if (isValidCoordPair(next.lat, next.lng)) {
+            const R = 6371000;
+            const toRad = (d) => (d * Math.PI) / 180;
+            const dLat = toRad(homeLat - next.lat);
+            const dLng = toRad(homeLng - next.lng);
+            const a =
+                Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(next.lat)) *
+                    Math.cos(toRad(homeLat)) *
+                    Math.sin(dLng / 2) ** 2;
+            const distanceToHomeM = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            next.distanceToHomeM = Math.round(distanceToHomeM);
+            next.insideGeofence =
+                next.geoEnabled && next.geoRadiusM > 0
+                    ? distanceToHomeM <= next.geoRadiusM
+                    : false;
+        }
+    }
+
+    return next;
+}
+
 function jsonResponse(data, corsHeaders, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
@@ -214,9 +269,10 @@ async function getCurrentSnapshot(env, deviceId) {
     if (!raw) return null;
 
     try {
+        const meta = await getDeviceMeta(env, deviceId);
         const normalized = normalizeSnapshot(deviceId, JSON.parse(raw));
         return isValidCoordPair(normalized.lat, normalized.lng)
-            ? enrichSnapshot(normalized)
+            ? enrichSnapshot(applyHomeOverride(normalized, meta))
             : null;
     } catch {
         return null;
@@ -232,9 +288,10 @@ async function getLatestHistorySnapshot(env, deviceId) {
     if (!raw) return null;
 
     try {
+        const meta = await getDeviceMeta(env, deviceId);
         const normalized = normalizeSnapshot(deviceId, JSON.parse(raw));
         return isValidCoordPair(normalized.lat, normalized.lng)
-            ? enrichSnapshot(normalized)
+            ? enrichSnapshot(applyHomeOverride(normalized, meta))
             : null;
     } catch {
         return null;
@@ -334,18 +391,19 @@ export default {
 
                 const existingMeta = await getDeviceMeta(env, deviceId);
                 const historySample = normalizeBoolean(data.historySample, false);
-                const snapshot = normalizeSnapshot(deviceId, {
+                const snapshot = applyHomeOverride(normalizeSnapshot(deviceId, {
                     ...data,
                     lat,
                     lng,
                     timestamp: Date.now(),
                     deviceName: existingMeta?.preferredName ?? data.deviceName ?? data.name,
-                });
+                }), existingMeta);
                 const meta = {
                     deviceId,
                     deviceName: snapshot.deviceName,
                     preferredName: existingMeta?.preferredName ?? null,
                     lastSeenAt: snapshot.timestamp,
+                    homeOverride: existingMeta?.homeOverride ?? null,
                 };
 
                 const writes = [
@@ -421,6 +479,7 @@ export default {
                     deviceName,
                     preferredName: deviceName,
                     lastSeenAt: current?.timestamp ?? Date.now(),
+                    homeOverride: (await getDeviceMeta(env, deviceId))?.homeOverride ?? null,
                 };
 
                 await Promise.all([
@@ -467,7 +526,10 @@ export default {
                     return jsonResponse({ error: "Device not found" }, corsHeaders, 404);
                 }
 
+                const currentMeta = await getDeviceMeta(env, deviceId);
+
                 let updatedSnapshot;
+                let homeOverride;
 
                 if (clear) {
                     // Remove home fields
@@ -475,11 +537,13 @@ export default {
                     delete updatedSnapshot.ageSeconds;
                     delete updatedSnapshot.online;
                     updatedSnapshot.homeSet = false;
-                    updatedSnapshot.homeLat = null;
-                    updatedSnapshot.homeLng = null;
+                    delete updatedSnapshot.homeLat;
+                    delete updatedSnapshot.homeLng;
                     updatedSnapshot.geoEnabled = false;
+                    updatedSnapshot.geoRadiusM = 0;
                     updatedSnapshot.distanceToHomeM = -1;
                     updatedSnapshot.insideGeofence = false;
+                    homeOverride = { mode: "cleared" };
                 } else {
                     const homeLat = normalizeNumber(data.homeLat);
                     const homeLng = normalizeNumber(data.homeLng);
@@ -510,6 +574,13 @@ export default {
                             ? true
                             : normalizeBoolean(data.geoEnabled, current.geoEnabled ?? false);
 
+                    homeOverride = {
+                        mode: "custom",
+                        homeLat,
+                        homeLng,
+                        geoRadiusM: geoEnabled && geoRadiusM !== null && geoRadiusM > 0 ? geoRadiusM : 0,
+                    };
+
                     updatedSnapshot = {
                         ...current,
                         homeSet: true,
@@ -527,10 +598,25 @@ export default {
                     delete updatedSnapshot.online;
                 }
 
-                await env.TRACKER_KV.put(
-                    `${TRACKER_PREFIX}${deviceId}`,
-                    JSON.stringify(updatedSnapshot)
-                );
+                const meta = {
+                    deviceId,
+                    deviceName: currentMeta?.deviceName ?? current.deviceName ?? deviceId,
+                    preferredName: currentMeta?.preferredName ?? null,
+                    lastSeenAt: current.timestamp ?? Date.now(),
+                    homeOverride,
+                };
+
+                await Promise.all([
+                    env.TRACKER_KV.put(
+                        `${TRACKER_PREFIX}${deviceId}`,
+                        JSON.stringify(updatedSnapshot)
+                    ),
+                    env.TRACKER_KV.put(
+                        `${DEVICE_META_PREFIX}${deviceId}`,
+                        JSON.stringify(meta)
+                    ),
+                    ensureDeviceIndexed(env, deviceId),
+                ]);
 
                 return jsonResponse(
                     {
