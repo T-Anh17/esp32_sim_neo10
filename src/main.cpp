@@ -80,6 +80,8 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   telemetrySetBootMs(millis());
+  pinMode(15, OUTPUT);
+  digitalWrite(15, HIGH);
 
   logLine("=== SOS GPS Tracker ===");
 
