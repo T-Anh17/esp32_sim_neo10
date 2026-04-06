@@ -3,6 +3,7 @@
 
 HardwareSerial simSerial(2);
 SemaphoreHandle_t simMutex = NULL;
+static String simTlsBlockedHosts[4];
 
 static String sim_extractHost(const String &url) {
   int scheme = url.indexOf("://");
@@ -16,6 +17,41 @@ static String sim_extractHost(const String &url) {
   return url.substring(start, end);
 }
 
+static bool sim_isCloudflareWorkerHost(const String &host) {
+  return host.equalsIgnoreCase("gps-tracker.ahcntab.workers.dev") ||
+         host.endsWith(".workers.dev");
+}
+
+static bool sim_isTlsHandshakeFailureCode(int statusCode) {
+  return statusCode == 715;
+}
+
+static bool sim_isHostBlocked(const String &host) {
+  if (host.isEmpty())
+    return false;
+  for (const String &blocked : simTlsBlockedHosts) {
+    if (!blocked.isEmpty() && blocked.equalsIgnoreCase(host))
+      return true;
+  }
+  return false;
+}
+
+static void sim_blockHost(const String &host) {
+  if (host.isEmpty() || sim_isHostBlocked(host))
+    return;
+
+  for (String &blocked : simTlsBlockedHosts) {
+    if (blocked.isEmpty()) {
+      blocked = host;
+      logPrintf("[SIM-SSL] host blocked after TLS failure: %s", host.c_str());
+      return;
+    }
+  }
+
+  simTlsBlockedHosts[0] = host;
+  logPrintf("[SIM-SSL] host blocked after TLS failure: %s", host.c_str());
+}
+
 static void sim_configureHttpsContext(const String &url) {
   const String host = sim_extractHost(url);
   if (host.isEmpty())
@@ -26,11 +62,18 @@ static void sim_configureHttpsContext(const String &url) {
   while (simSerial.available())
     simSerial.read();
 
-  simSerial.println("AT+CSSLCFG=\"sslversion\",0,3");
+  const bool useCloudflarePreset = sim_isCloudflareWorkerHost(host);
+
+  // Cloudflare Workers handshakes are stricter than AssistNow/u-blox on some
+  // modem firmware builds, so keep a dedicated TLS1.2 + SNI preset here.
+  simSerial.printf("AT+CSSLCFG=\"sslversion\",0,%d\r\n",
+                   useCloudflarePreset ? 4 : 3);
   delay(100);
   simSerial.println("AT+CSSLCFG=\"authmode\",0,0");
   delay(100);
   simSerial.println("AT+CSSLCFG=\"ignorertctime\",0,1");
+  delay(100);
+  simSerial.println("AT+CSSLCFG=\"ignoretimediff\",0,1");
   delay(100);
   simSerial.println("AT+CSSLCFG=\"negotiatetime\",0,120");
   delay(100);
@@ -40,6 +83,19 @@ static void sim_configureHttpsContext(const String &url) {
   simSerial.println("AT+CSSLCFG=\"enableSNI\",0,1");
   delay(150);
   sim_readResponse(300);
+
+  logPrintf("[SIM-SSL] host=%s preset=%s tls=%d", host.c_str(),
+            useCloudflarePreset ? "cloudflare" : "default",
+            useCloudflarePreset ? 4 : 3);
+}
+
+bool SIM7680C_isTlsHostBlocked(const String &url) {
+  return sim_isHostBlocked(sim_extractHost(url));
+}
+
+void SIM7680C_clearTlsHostBlocklist() {
+  for (String &blocked : simTlsBlockedHosts)
+    blocked = "";
 }
 
 static bool sim_cancelRequested() {
@@ -563,6 +619,11 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
     return false;
   if (telemetryIsSosActive())
     return false;
+  if (SIM7680C_isTlsHostBlocked(url)) {
+    logPrintf("[SIM-SSL] skip blocked host: %s", sim_extractHost(url).c_str());
+    telemetrySetTrackSimCode(715);
+    return false;
+  }
 
   bool isHttps = url.startsWith("https");
 
@@ -649,6 +710,9 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
     logPrintf("[SIM7680C] HTTP failure status=%d len=%d", statusCode, dataLen);
   }
 
+  if (sim_isTlsHandshakeFailureCode(statusCode))
+    sim_blockHost(sim_extractHost(url));
+
   simSerial.println("AT+HTTPTERM");
   delay(200);
   while (simSerial.available())
@@ -669,6 +733,11 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
     return false;
   if (telemetryIsSosActive())
     return false; // don't use modem during SOS
+  if (SIM7680C_isTlsHostBlocked(url)) {
+    logPrintf("[SIM-SSL] skip blocked host: %s", sim_extractHost(url).c_str());
+    telemetrySetTrackSimCode(715);
+    return false;
+  }
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
 
@@ -710,11 +779,12 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
   telemetrySetTrackSimCode(-1);
 
   int si = response.indexOf("+HTTPACTION: 1,");
+  int statusCode = -1;
   if (si != -1) {
     int ci = response.indexOf(",", si + 15);
     if (ci != -1) {
       String st = response.substring(si + 15, ci);
-      int statusCode = st.toInt();
+      statusCode = st.toInt();
       telemetrySetTrackSimCode(statusCode);
       logPrintf("[SIM7680C] HTTP Status: %s", st.c_str());
       ok = (statusCode >= 200 && statusCode < 300);
@@ -728,6 +798,9 @@ bool SIM7680C_httpPost(const String &url, const String &contentType,
 
   if (simMutex)
     xSemaphoreGive(simMutex);
+
+  if (sim_isTlsHandshakeFailureCode(statusCode))
+    sim_blockHost(sim_extractHost(url));
 
   if (ok)
     SIM_setCapability(SIM_CAP_HTTP_OK);
@@ -856,6 +929,10 @@ int SIM7680C_httpGetToFile(const String &url, const char *filePath) {
     logLine("[SIM-GET] SOS active, skip");
     return 0;
   }
+  if (SIM7680C_isTlsHostBlocked(url)) {
+    logPrintf("[SIM-SSL] skip blocked host: %s", sim_extractHost(url).c_str());
+    return 0;
+  }
 
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
@@ -929,6 +1006,9 @@ int SIM7680C_httpGetToFile(const String &url, const char *filePath) {
   }
 
   logPrintf("[SIM-GET] HTTP %d, %d bytes", statusCode, dataLen);
+
+  if (sim_isTlsHandshakeFailureCode(statusCode))
+    sim_blockHost(sim_extractHost(url));
 
   if (statusCode != 200 || dataLen < 256) {
     logPrintf("[SIM-GET] Bad response: status=%d len=%d", statusCode, dataLen);
@@ -1077,6 +1157,10 @@ bool SIM7680C_httpGetWithResponse(const String &url, String &outResponse) {
     return false;
   if (telemetryIsSosActive())
     return false;
+  if (SIM7680C_isTlsHostBlocked(url)) {
+    logPrintf("[SIM-SSL] skip blocked host: %s", sim_extractHost(url).c_str());
+    return false;
+  }
 
   if (simMutex)
     xSemaphoreTake(simMutex, portMAX_DELAY);
@@ -1136,6 +1220,9 @@ bool SIM7680C_httpGetWithResponse(const String &url, String &outResponse) {
   }
 
   logPrintf("[SIM-GET] HTTP %d, %d bytes", statusCode, dataLen);
+
+  if (sim_isTlsHandshakeFailureCode(statusCode))
+    sim_blockHost(sim_extractHost(url));
 
   bool ok = false;
   if (statusCode == 200 && dataLen > 0) {

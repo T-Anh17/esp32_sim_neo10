@@ -144,6 +144,10 @@ void loadDataFromRom() {
 
   // SIM tracking
   nvsReadBool("SIM_TRK", &cfg.simTrackingEnable, true);
+  nvsReadStr("WTRK_URL", cfg.wifiTrackingUrl, sizeof(cfg.wifiTrackingUrl),
+             "https://gps-tracker.ahcntab.workers.dev/update");
+  nvsReadStr("STRK_URL", cfg.simTrackingUrl, sizeof(cfg.simTrackingUrl),
+             "");
 
   // Network location
   nvsReadBool("NLOC_EN", &cfg.netlocEnable, true);
@@ -151,6 +155,8 @@ void loadDataFromRom() {
   nvsReadStr("NLOC_PRV", cfg.netlocProvider, sizeof(cfg.netlocProvider), "unwiredlabs");
   nvsReadStr("NLOC_URL", cfg.netlocRelayUrl, sizeof(cfg.netlocRelayUrl),
              "https://gps-tracker.ahcntab.workers.dev/api/geolocate");
+  nvsReadStr("SNLOC_URL", cfg.simNetlocRelayUrl, sizeof(cfg.simNetlocRelayUrl),
+             "");
 
   applyConfigSnapshot(&cfg);
 
@@ -186,11 +192,14 @@ void saveAllConfig() {
   nvs_set_str(nvsHandle, "CHIPCODE", cfg.assistChipcode);
   nvs_set_str(nvsHandle, "ASST_TOK", cfg.assistToken);
   nvs_set_u8(nvsHandle, "SIM_TRK", cfg.simTrackingEnable ? 1 : 0);
+  nvs_set_str(nvsHandle, "WTRK_URL", cfg.wifiTrackingUrl);
+  nvs_set_str(nvsHandle, "STRK_URL", cfg.simTrackingUrl);
 
   nvs_set_u8(nvsHandle, "NLOC_EN", cfg.netlocEnable ? 1 : 0);
   nvs_set_str(nvsHandle, "NLOC_KEY", cfg.netlocApiKey);
   nvs_set_str(nvsHandle, "NLOC_PRV", cfg.netlocProvider);
   nvs_set_str(nvsHandle, "NLOC_URL", cfg.netlocRelayUrl);
+  nvs_set_str(nvsHandle, "SNLOC_URL", cfg.simNetlocRelayUrl);
 
   nvs_commit(nvsHandle);
   logLine("[STORAGE] Saved");

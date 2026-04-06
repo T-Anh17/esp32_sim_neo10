@@ -18,6 +18,7 @@ constexpr size_t CONFIG_ASSIST_TOKEN_LEN = 128;
 constexpr size_t TELEMETRY_STATUS_LEN = 32;
 constexpr size_t CONFIG_NETLOC_KEY_LEN = 64;
 constexpr size_t CONFIG_NETLOC_RELAY_LEN = 192;
+constexpr size_t CONFIG_TRACKING_URL_LEN = 192;
 constexpr size_t CONFIG_DEVICE_ID_LEN = 48;
 constexpr size_t CONFIG_DEVICE_NAME_LEN = 64;
 
@@ -68,11 +69,14 @@ struct ConfigSnapshot {
   char assistChipcode[CONFIG_ASSIST_CHIPCODE_LEN];
   char assistToken[CONFIG_ASSIST_TOKEN_LEN];
   bool simTrackingEnable;
+  char wifiTrackingUrl[CONFIG_TRACKING_URL_LEN];
+  char simTrackingUrl[CONFIG_TRACKING_URL_LEN];
   // --- Network location config ---
   bool netlocEnable;
   char netlocApiKey[CONFIG_NETLOC_KEY_LEN];
   char netlocProvider[32];
   char netlocRelayUrl[CONFIG_NETLOC_RELAY_LEN];
+  char simNetlocRelayUrl[CONFIG_NETLOC_RELAY_LEN];
 };
 
 struct TelemetrySnapshot {
@@ -163,12 +167,15 @@ extern char ASSIST_TOKEN[128];
 
 // --- SIM tracking ---
 extern bool SIM_TRACKING_ENABLE;
+extern char WIFI_TRACKING_URL[CONFIG_TRACKING_URL_LEN];
+extern char SIM_TRACKING_URL[CONFIG_TRACKING_URL_LEN];
 
 // --- Network location config ---
 extern bool NETLOC_ENABLE;
 extern char NETLOC_API_KEY[CONFIG_NETLOC_KEY_LEN];
 extern char NETLOC_PROVIDER[32];
 extern char NETLOC_RELAY_URL[CONFIG_NETLOC_RELAY_LEN];
+extern char SIM_NETLOC_RELAY_URL[CONFIG_NETLOC_RELAY_LEN];
 
 // --- Runtime flags ---
 extern volatile uint8_t SIM_CAPABILITY_LEVEL;

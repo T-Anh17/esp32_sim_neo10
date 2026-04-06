@@ -95,8 +95,14 @@ textarea{resize:vertical;font-family:inherit;min-height:66px}
   <input id=p3 type=tel placeholder="(tuỳ chọn)">
   <label>Lời nhắn SMS</label>
   <textarea id=ms placeholder="Ví dụ: Tôi cần hỗ trợ khẩn cấp..."></textarea>
-  <label>Netloc Relay URL</label>
+  <label>WiFi Tracking URL</label>
+  <input id=wtrk type=text placeholder="https://your-wifi-host/update">
+  <label>SIM Tracking URL</label>
+  <input id=strk type=text placeholder="https://your-sim-host/update">
+  <label>WiFi Netloc Relay URL</label>
   <input id=relay type=text placeholder="https://your-host/api/geolocate">
+  <label>SIM Netloc Relay URL</label>
+  <input id=srelay type=text placeholder="https://your-sim-host/api/geolocate">
 
   <div class=card2>
     <div class=kv><span>HOME</span><b id=home>Chưa có</b></div>
@@ -126,10 +132,10 @@ function N(p){p=(p||'').trim();if(p.charAt(0)==='0'&&p.length>8)return'+84'+p.su
 function H(){var lat=($('hlat').value||'').trim(),lng=($('hlng').value||'').trim();return lat!==''&&lng!==''}
 function hb(locValid){$('bh').disabled=!(locValid||H())}
 function init(){fetch('/config').then(function(r){return r.json()}).then(function(c){
-  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||'';$('relay').value=c.nloc_url||'';$('hlat').value=(typeof c.home_lat==='number'&&c.home_lat)?c.home_lat:'';$('hlng').value=(typeof c.home_lng==='number'&&c.home_lng)?c.home_lng:'';hb(false)
+  $('p1').value=c.c1||'';$('p2').value=c.c2||'';$('p3').value=c.c3||'';$('ms').value=c.sms||'';$('wtrk').value=c.wtrk_url||'';$('strk').value=c.strk_url||'';$('relay').value=c.nloc_url||'';$('srelay').value=c.snloc_url||'';$('hlat').value=(typeof c.home_lat==='number'&&c.home_lat)?c.home_lat:'';$('hlng').value=(typeof c.home_lng==='number'&&c.home_lng)?c.home_lng:'';hb(false)
 }).catch(function(){})}
 function sv(){var b=$('bs');b.disabled=true;b.textContent='Đang lưu...';
-  var d='c1='+encodeURIComponent(N($('p1').value))+'&c2='+encodeURIComponent(N($('p2').value))+'&c3='+encodeURIComponent(N($('p3').value))+'&sms='+encodeURIComponent($('ms').value)+'&nloc_url='+encodeURIComponent($('relay').value);
+  var d='c1='+encodeURIComponent(N($('p1').value))+'&c2='+encodeURIComponent(N($('p2').value))+'&c3='+encodeURIComponent(N($('p3').value))+'&sms='+encodeURIComponent($('ms').value)+'&wtrk_url='+encodeURIComponent($('wtrk').value)+'&strk_url='+encodeURIComponent($('strk').value)+'&nloc_url='+encodeURIComponent($('relay').value)+'&snloc_url='+encodeURIComponent($('srelay').value);
   fetch('/save_config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:d})
     .then(function(r){toast(r.ok?'Đã lưu cấu hình!':'Lỗi lưu cấu hình',r.ok)})
     .catch(function(){toast('Không thể lưu',false)})
@@ -195,8 +201,17 @@ void initFriendlyNamePortal() {
                "\"sms\":\"" +
                jsonEsc(cfg.smsTemplate) +
                "\","
+               "\"wtrk_url\":\"" +
+               jsonEsc(cfg.wifiTrackingUrl) +
+               "\","
+               "\"strk_url\":\"" +
+               jsonEsc(cfg.simTrackingUrl) +
+               "\","
                "\"nloc_url\":\"" +
                jsonEsc(cfg.netlocRelayUrl) +
+               "\","
+               "\"snloc_url\":\"" +
+               jsonEsc(cfg.simNetlocRelayUrl) +
                "\","
                "\"home\":" +
                String((cfg.homeLat != 0 || cfg.homeLng != 0) ? "true" : "false") +
@@ -224,9 +239,18 @@ void initFriendlyNamePortal() {
     cfg.call3[sizeof(cfg.call3) - 1] = '\0';
     strncpy(cfg.smsTemplate, val("sms").c_str(), sizeof(cfg.smsTemplate) - 1);
     cfg.smsTemplate[sizeof(cfg.smsTemplate) - 1] = '\0';
+    strncpy(cfg.wifiTrackingUrl, val("wtrk_url").c_str(),
+            sizeof(cfg.wifiTrackingUrl) - 1);
+    cfg.wifiTrackingUrl[sizeof(cfg.wifiTrackingUrl) - 1] = '\0';
+    strncpy(cfg.simTrackingUrl, val("strk_url").c_str(),
+            sizeof(cfg.simTrackingUrl) - 1);
+    cfg.simTrackingUrl[sizeof(cfg.simTrackingUrl) - 1] = '\0';
     strncpy(cfg.netlocRelayUrl, val("nloc_url").c_str(),
             sizeof(cfg.netlocRelayUrl) - 1);
     cfg.netlocRelayUrl[sizeof(cfg.netlocRelayUrl) - 1] = '\0';
+    strncpy(cfg.simNetlocRelayUrl, val("snloc_url").c_str(),
+            sizeof(cfg.simNetlocRelayUrl) - 1);
+    cfg.simNetlocRelayUrl[sizeof(cfg.simNetlocRelayUrl) - 1] = '\0';
     applyConfigSnapshot(&cfg);
 
     // Save only edited fields to NVS
@@ -234,7 +258,10 @@ void initFriendlyNamePortal() {
     nvs_set_str(nvsHandle, "CALL_2", cfg.call2);
     nvs_set_str(nvsHandle, "CALL_3", cfg.call3);
     nvs_set_str(nvsHandle, "SMS_TPL", cfg.smsTemplate);
+    nvs_set_str(nvsHandle, "WTRK_URL", cfg.wifiTrackingUrl);
+    nvs_set_str(nvsHandle, "STRK_URL", cfg.simTrackingUrl);
     nvs_set_str(nvsHandle, "NLOC_URL", cfg.netlocRelayUrl);
+    nvs_set_str(nvsHandle, "SNLOC_URL", cfg.simNetlocRelayUrl);
     nvs_commit(nvsHandle);
 
     logPrintf("[PORTAL] Saved: C1=%s C2=%s C3=%s", cfg.call1, cfg.call2,

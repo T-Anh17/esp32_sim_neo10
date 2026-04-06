@@ -111,8 +111,8 @@ void setup() {
 
   xTaskCreate(buttonTask, "btnTask", 4096, NULL, 1, NULL);
   xTaskCreate(ledTask, "ledTask", 2048, NULL, 1, NULL);
-  xTaskCreate(signalMonitorTask, "sigMon", 4096, NULL, 1, NULL);
-  xTaskCreate(monitorTask, "monTask", 4096, NULL, 1, NULL);
+  xTaskCreate(signalMonitorTask, "sigMon", 8192, NULL, 1, NULL);
+  xTaskCreate(monitorTask, "monTask", 6144, NULL, 1, NULL);
   xTaskCreate(networkLocationTask, "netLoc", 8192, NULL, 1, &xHandle_netloc);
 }
 

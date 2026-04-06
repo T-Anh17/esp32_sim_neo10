@@ -37,6 +37,9 @@ char ASSIST_CHIPCODE[64] = ""; // no compiled-in default; loaded from NVS only
 char ASSIST_TOKEN[128] = "";
 
 bool SIM_TRACKING_ENABLE = true;
+char WIFI_TRACKING_URL[CONFIG_TRACKING_URL_LEN] =
+    "https://gps-tracker.ahcntab.workers.dev/update";
+char SIM_TRACKING_URL[CONFIG_TRACKING_URL_LEN] = "";
 
 bool NETLOC_ENABLE = true;
 char NETLOC_API_KEY[CONFIG_NETLOC_KEY_LEN] =
@@ -46,6 +49,7 @@ char NETLOC_PROVIDER[32] =
 
 char NETLOC_RELAY_URL[CONFIG_NETLOC_RELAY_LEN] =
     "https://gps-tracker.ahcntab.workers.dev/api/geolocate";
+char SIM_NETLOC_RELAY_URL[CONFIG_NETLOC_RELAY_LEN] = "";
 
 volatile uint8_t SIM_CAPABILITY_LEVEL = 0;
 volatile bool SOS_ACTIVE = false;
@@ -226,6 +230,12 @@ void getConfigSnapshot(ConfigSnapshot *out) {
   strncpy(out->assistToken, ASSIST_TOKEN, sizeof(out->assistToken) - 1);
   out->assistToken[sizeof(out->assistToken) - 1] = '\0';
   out->simTrackingEnable = SIM_TRACKING_ENABLE;
+  strncpy(out->wifiTrackingUrl, WIFI_TRACKING_URL,
+          sizeof(out->wifiTrackingUrl) - 1);
+  out->wifiTrackingUrl[sizeof(out->wifiTrackingUrl) - 1] = '\0';
+  strncpy(out->simTrackingUrl, SIM_TRACKING_URL,
+          sizeof(out->simTrackingUrl) - 1);
+  out->simTrackingUrl[sizeof(out->simTrackingUrl) - 1] = '\0';
   out->netlocEnable = NETLOC_ENABLE;
   strncpy(out->netlocApiKey, NETLOC_API_KEY, sizeof(out->netlocApiKey) - 1);
   out->netlocApiKey[sizeof(out->netlocApiKey) - 1] = '\0';
@@ -235,6 +245,9 @@ void getConfigSnapshot(ConfigSnapshot *out) {
   strncpy(out->netlocRelayUrl, NETLOC_RELAY_URL,
           sizeof(out->netlocRelayUrl) - 1);
   out->netlocRelayUrl[sizeof(out->netlocRelayUrl) - 1] = '\0';
+  strncpy(out->simNetlocRelayUrl, SIM_NETLOC_RELAY_URL,
+          sizeof(out->simNetlocRelayUrl) - 1);
+  out->simNetlocRelayUrl[sizeof(out->simNetlocRelayUrl) - 1] = '\0';
   unlockConfig();
 }
 
@@ -272,6 +285,12 @@ void applyConfigSnapshot(const ConfigSnapshot *snapshot) {
   strncpy(ASSIST_TOKEN, snapshot->assistToken, sizeof(ASSIST_TOKEN) - 1);
   ASSIST_TOKEN[sizeof(ASSIST_TOKEN) - 1] = '\0';
   SIM_TRACKING_ENABLE = snapshot->simTrackingEnable;
+  strncpy(WIFI_TRACKING_URL, snapshot->wifiTrackingUrl,
+          sizeof(WIFI_TRACKING_URL) - 1);
+  WIFI_TRACKING_URL[sizeof(WIFI_TRACKING_URL) - 1] = '\0';
+  strncpy(SIM_TRACKING_URL, snapshot->simTrackingUrl,
+          sizeof(SIM_TRACKING_URL) - 1);
+  SIM_TRACKING_URL[sizeof(SIM_TRACKING_URL) - 1] = '\0';
   NETLOC_ENABLE = snapshot->netlocEnable;
   strncpy(NETLOC_API_KEY, snapshot->netlocApiKey, sizeof(NETLOC_API_KEY) - 1);
   NETLOC_API_KEY[sizeof(NETLOC_API_KEY) - 1] = '\0';
@@ -281,6 +300,9 @@ void applyConfigSnapshot(const ConfigSnapshot *snapshot) {
   strncpy(NETLOC_RELAY_URL, snapshot->netlocRelayUrl,
           sizeof(NETLOC_RELAY_URL) - 1);
   NETLOC_RELAY_URL[sizeof(NETLOC_RELAY_URL) - 1] = '\0';
+  strncpy(SIM_NETLOC_RELAY_URL, snapshot->simNetlocRelayUrl,
+          sizeof(SIM_NETLOC_RELAY_URL) - 1);
+  SIM_NETLOC_RELAY_URL[sizeof(SIM_NETLOC_RELAY_URL) - 1] = '\0';
   syncLegacyUnlocked();
   unlockConfig();
 }

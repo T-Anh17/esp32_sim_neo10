@@ -7,7 +7,10 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
-#define SERVER_URL "https://gps-tracker.ahcntab.workers.dev/update"
+static constexpr const char *DEFAULT_TRACKING_URL =
+    "https://gps-tracker.ahcntab.workers.dev/update";
+static constexpr const char *DEFAULT_TRACKING_GET_URL =
+    "https://gps-tracker.ahcntab.workers.dev/update_get";
 
 // Conservative cadence for multi-device deployments to stay well below
 // monthly request caps while preserving meaningful movement updates.
@@ -134,6 +137,26 @@ static void appendJsonString(String &json, const String &value) {
   json += '"';
 }
 
+static String urlEncodeTrack(const String &input) {
+  String out;
+  const char *hex = "0123456789ABCDEF";
+  for (size_t i = 0; i < input.length(); ++i) {
+    unsigned char c = static_cast<unsigned char>(input[i]);
+    const bool safe =
+        (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' ||
+        c == '~';
+    if (safe) {
+      out += static_cast<char>(c);
+    } else {
+      out += '%';
+      out += hex[(c >> 4) & 0x0F];
+      out += hex[c & 0x0F];
+    }
+  }
+  return out;
+}
+
 static void appendGeoFields(String &json, double currentLat, double currentLng,
                             const ConfigSnapshot &cfg) {
   bool homeSet = isValidCoordPair(cfg.homeLat, cfg.homeLng);
@@ -218,6 +241,47 @@ static String buildTrackingPayload(double lat, double lng, bool isTest,
   return json;
 }
 
+static String buildTrackingFallbackGetUrl(const ConfigSnapshot &cfg,
+                                          const BestLocationResult &loc,
+                                          bool historySample) {
+  if (strlen(cfg.simTrackingUrl) < 8)
+    return "";
+
+  int satellites = gps.satellites.isValid() ? gps.satellites.value() : 0;
+  float speedKmph = gps.speed.isValid() ? gps.speed.kmph() : 0.0f;
+
+  String url = String(cfg.simTrackingUrl);
+  int queryCut = url.indexOf('?');
+  if (queryCut >= 0)
+    url = url.substring(0, queryCut);
+  int updateIdx = url.indexOf("/update");
+  if (updateIdx >= 0)
+    url = url.substring(0, updateIdx) + "/update_get";
+  else
+    url = DEFAULT_TRACKING_GET_URL;
+  url += "?deviceId=";
+  url += urlEncodeTrack(String(cfg.deviceId));
+  url += "&deviceName=";
+  url += urlEncodeTrack(String(cfg.deviceName));
+  url += "&lat=";
+  url += String(loc.lat, 6);
+  url += "&lng=";
+  url += String(loc.lng, 6);
+  url += "&locSource=";
+  url += urlEncodeTrack(String(locationSourceName(loc.source)));
+  url += "&locAccuracyM=";
+  url += String(loc.accuracyM, 1);
+  url += "&locAgeMs=";
+  url += String(loc.ageMs);
+  url += "&satellites=";
+  url += String(satellites);
+  url += "&speedKmph=";
+  url += String(speedKmph, 1);
+  url += "&historySample=";
+  url += historySample ? "1" : "0";
+  return url;
+}
+
 // ============================================================
 // Send via WiFi
 // ============================================================
@@ -225,11 +289,16 @@ static bool sendViaWiFi(const String &json) {
   if (WiFi.status() != WL_CONNECTED)
     return false;
 
+  ConfigSnapshot cfg = {};
+  getConfigSnapshot(&cfg);
+  const char *wifiUrl =
+      strlen(cfg.wifiTrackingUrl) >= 8 ? cfg.wifiTrackingUrl : DEFAULT_TRACKING_URL;
+
   HTTPClient http;
   WiFiClientSecure client;
   client.setInsecure();
 
-  if (!http.begin(client, SERVER_URL)) {
+  if (!http.begin(client, wifiUrl)) {
     logLine("[TRACK] WiFi HTTP begin fail");
     telemetrySetTrackWifiCode(-1);
     return false;
@@ -262,9 +331,19 @@ static bool sendViaSIM(const String &json) {
     return false;
   if (telemetryIsSosActive())
     return false;
+  if (strlen(cfg.simTrackingUrl) < 8) {
+    logLine("[TRACK] SIM tracking URL not configured, skip");
+    return false;
+  }
+  const char *simUrl = cfg.simTrackingUrl;
+  if (SIM7680C_isTlsHostBlocked(simUrl)) {
+    logPrintf("[TRACK] SIM TLS blocked for host=%s", simUrl);
+    telemetrySetTrackSimCode(715);
+    return false;
+  }
 
   logLine("[TRACK] SIM POST...");
-  if (!SIM7680C_httpPost(SERVER_URL, "application/json", json)) {
+  if (!SIM7680C_httpPost(simUrl, "application/json", json)) {
     TelemetrySnapshot telem = {};
     getTelemetrySnapshot(&telem);
     logPrintf("[TRACK] SIM fail: %d capability=%s", telem.trackSimCode,
@@ -309,8 +388,27 @@ void Tracking_Loop() {
       buildTrackingPayload(loc.lat, loc.lng, false, cfg, loc, writeHistory);
 
   bool wifiOK = sendViaWiFi(json);
-  if (!wifiOK)
+  if (!wifiOK) {
     wifiOK = sendViaSIM(json);
+    if (!wifiOK) {
+      String fallbackUrl =
+          buildTrackingFallbackGetUrl(cfg, loc, writeHistory);
+      if (fallbackUrl.length() > 0) {
+        logPrintf("[TRACK] SIM GET fallback urlLen=%d", fallbackUrl.length());
+        String response;
+        if (SIM7680C_httpGetWithResponse(fallbackUrl, response)) {
+          logPrintf("[TRACK] SIM GET fallback OK body=%s", response.c_str());
+          wifiOK = true;
+        } else if (response.length() > 0) {
+          logPrintf("[TRACK] SIM GET fallback body=%s", response.c_str());
+        } else {
+          logLine("[TRACK] SIM GET fallback failed");
+        }
+      } else {
+        logLine("[TRACK] SIM GET fallback disabled: no SIM URL");
+      }
+    }
+  }
 
   if (wifiOK) {
     lastFailedSendMs = 0;
@@ -341,7 +439,10 @@ String trackingTestRequest() {
   WiFiClientSecure client;
   client.setInsecure();
 
-  if (!http.begin(client, SERVER_URL))
+  const char *wifiUrl =
+      strlen(cfg.wifiTrackingUrl) >= 8 ? cfg.wifiTrackingUrl : DEFAULT_TRACKING_URL;
+
+  if (!http.begin(client, wifiUrl))
     return "{\"error\":\"HTTP begin failed\"}";
 
   http.addHeader("Content-Type", "application/json");

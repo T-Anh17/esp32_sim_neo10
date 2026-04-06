@@ -48,6 +48,8 @@ bool SIM7680C_httpPostWithResponse(const String &url, const String &contentType,
 // Returns number of bytes downloaded, or 0 on failure.
 int SIM7680C_httpGetToFile(const String &url, const char *filePath);
 bool SIM7680C_httpGetWithResponse(const String &url, String &outResponse);
+bool SIM7680C_isTlsHostBlocked(const String &url);
+void SIM7680C_clearTlsHostBlocklist();
 
 // --- Time ---
 // Read network time from SIM module (AT+CCLK?)
