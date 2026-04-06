@@ -7,6 +7,8 @@ static constexpr const char *AP_PASS = "123456788";
 static const IPAddress AP_IP(192, 168, 4, 1);
 static const IPAddress AP_MASK(255, 255, 255, 0);
 
+static bool hasStaCredentials() { return strlen(SSID_Name) > 0; }
+
 static void configureSoftAp() {
   WiFi.softAPConfig(AP_IP, AP_IP, AP_MASK);
   if (WiFi.softAP(AP_SSID, AP_PASS, 6, 0))
@@ -47,27 +49,37 @@ static void onWiFiEvent(WiFiEvent_t event) {
 
 // ============================================================
 // ** SINGLE SOURCE OF TRUTH for WiFi.mode() **
-// Sets APSTA so AP is always available + STA can connect to router.
+// Power-saving policy:
+//   - If STA credentials exist, run STA-only to avoid constant AP drain.
+//   - If no STA credentials exist, start AP for provisioning.
 // ============================================================
 void initWiFi() {
   WiFi.persistent(false);
-  WiFi.mode(WIFI_MODE_APSTA); // <-- THE ONLY WiFi.mode() call
   WiFi.setSleep(WIFI_PS_MIN_MODEM);
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(onWiFiEvent);
 
-  configureSoftAp();
-  startStaConnect();
+  if (hasStaCredentials()) {
+    WiFi.mode(WIFI_MODE_STA);
+    startStaConnect();
+  } else {
+    WiFi.mode(WIFI_MODE_AP);
+    configureSoftAp();
+    Serial.println("[WIFI] No STA credentials, AP-only provisioning mode");
+  }
 
   unsigned long t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) {
+  while (hasStaCredentials() && WiFi.status() != WL_CONNECTED &&
+         millis() - t0 < 8000) {
     delay(400);
     Serial.print(".");
   }
 
-  if (WiFi.status() == WL_CONNECTED)
+  if (hasStaCredentials() && WiFi.status() == WL_CONNECTED)
     Serial.printf("\n[WIFI] STA OK  IP=%s\n",
                   WiFi.localIP().toString().c_str());
+  else if (hasStaCredentials())
+    Serial.println("\n[WIFI] STA failed");
   else
     Serial.println("\n[WIFI] STA failed (AP still running)");
 }
@@ -83,10 +95,15 @@ void wifiEnterScanMode() {
 }
 
 void wifiRestoreApStaMode() {
-  WiFi.mode(WIFI_MODE_APSTA);
+  if (hasStaCredentials()) {
+    WiFi.mode(WIFI_MODE_STA);
+  } else {
+    WiFi.mode(WIFI_MODE_AP);
+  }
   WiFi.setSleep(WIFI_PS_MIN_MODEM);
-  configureSoftAp();
-  if (strlen(SSID_Name) > 0)
+  if (hasStaCredentials())
     startStaConnect();
+  else
+    configureSoftAp();
   WiFi.setAutoReconnect(true);
 }

@@ -17,6 +17,10 @@ static DNSServer dnsServer;
 static const byte DNS_PORT = 53;
 static IPAddress apIP(192, 168, 4, 1);
 
+static bool portalApActive() {
+  return (WiFi.getMode() & WIFI_MODE_AP) != 0 && WiFi.softAPIP() != IPAddress();
+}
+
 // ============================================================
 // JSON-safe string escape (handles " and \)
 // ============================================================
@@ -178,7 +182,8 @@ init();poll();setInterval(poll,2000);
 
 // ============================================================
 void initFriendlyNamePortal() {
-  dnsServer.start(DNS_PORT, "*", apIP);
+  if (portalApActive())
+    dnsServer.start(DNS_PORT, "*", apIP);
 
   // --- Main page ---
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *r) {
@@ -365,11 +370,25 @@ void initFriendlyNamePortal() {
   });
 
   // --- Captive portal: redirect any URL to "/" ---
-  server.onNotFound(
-      [](AsyncWebServerRequest *r) { r->redirect("http://192.168.4.1/"); });
+  server.onNotFound([](AsyncWebServerRequest *r) {
+    if (portalApActive()) {
+      r->redirect("http://192.168.4.1/");
+      return;
+    }
+    r->send(404, "text/plain", "Not found");
+  });
 
   server.begin();
-  logLine("[PORTAL] http://192.168.4.1 (or any URL on AP)");
+  if (portalApActive()) {
+    logLine("[PORTAL] AP provisioning mode: http://192.168.4.1");
+  } else if (WiFi.status() == WL_CONNECTED) {
+    logPrintf("[PORTAL] STA mode: http://%s/", WiFi.localIP().toString().c_str());
+  } else {
+    logLine("[PORTAL] Started without AP; waiting for STA connectivity");
+  }
 }
 
-void loopFriendlyNamePortal() { dnsServer.processNextRequest(); }
+void loopFriendlyNamePortal() {
+  if (portalApActive())
+    dnsServer.processNextRequest();
+}
