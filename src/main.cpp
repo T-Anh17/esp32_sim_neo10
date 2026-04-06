@@ -68,7 +68,7 @@ static void monitorTask(void *pvParameters) {
     // Print atomically
     serialLog(line);
 
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(30000));
   }
 }
 
@@ -89,7 +89,6 @@ void setup() {
 
   // 2) Hardware
   buzzer_init();
-  initStrip();
 
   // 3) WiFi
   initWiFi();
@@ -110,7 +109,6 @@ void setup() {
   xTaskCreatePinnedToCore(gpsTask, "gpsTask", 8192, NULL, 1, &xHandle_gps, 1);
 
   xTaskCreate(buttonTask, "btnTask", 4096, NULL, 1, NULL);
-  xTaskCreate(ledTask, "ledTask", 2048, NULL, 1, NULL);
   xTaskCreate(signalMonitorTask, "sigMon", 8192, NULL, 1, NULL);
   xTaskCreate(monitorTask, "monTask", 6144, NULL, 1, NULL);
   xTaskCreate(networkLocationTask, "netLoc", 8192, NULL, 1, &xHandle_netloc);
@@ -119,5 +117,5 @@ void setup() {
 void loop() {
   Tracking_Loop();
   loopFriendlyNamePortal();
-  vTaskDelay(pdMS_TO_TICKS(16));
+  vTaskDelay(pdMS_TO_TICKS(250));
 }

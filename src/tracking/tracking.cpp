@@ -12,18 +12,17 @@ static constexpr const char *DEFAULT_TRACKING_URL =
 static constexpr const char *DEFAULT_TRACKING_GET_URL =
     "https://gps-tracker.ahcntab.workers.dev/update_get";
 
-// Conservative cadence for multi-device deployments to stay well below
-// monthly request caps while preserving meaningful movement updates.
-static constexpr unsigned long CURRENT_MOVING_INTERVAL_MS = 600000UL;
-static constexpr unsigned long CURRENT_STATIONARY_INTERVAL_MS = 1800000UL;
-static constexpr unsigned long CURRENT_DISTANCE_MIN_GAP_MS = 300000UL;
-static constexpr double CURRENT_DISTANCE_DELTA_M = 250.0;
+// Low-power default profile for 2000mAh LiPo deployments.
+static constexpr unsigned long CURRENT_MOVING_INTERVAL_MS = 900000UL;
+static constexpr unsigned long CURRENT_STATIONARY_INTERVAL_MS = 7200000UL;
+static constexpr unsigned long CURRENT_DISTANCE_MIN_GAP_MS = 900000UL;
+static constexpr double CURRENT_DISTANCE_DELTA_M = 500.0;
 
-static constexpr unsigned long HISTORY_MOVING_INTERVAL_MS = 1800000UL;
-static constexpr unsigned long HISTORY_STATIONARY_INTERVAL_MS = 7200000UL;
-static constexpr unsigned long HISTORY_DISTANCE_MIN_GAP_MS = 900000UL;
-static constexpr double HISTORY_DISTANCE_DELTA_M = 1000.0;
-static constexpr unsigned long TRACK_SEND_RETRY_BACKOFF_MS = 15000UL;
+static constexpr unsigned long HISTORY_MOVING_INTERVAL_MS = 7200000UL;
+static constexpr unsigned long HISTORY_STATIONARY_INTERVAL_MS = 21600000UL;
+static constexpr unsigned long HISTORY_DISTANCE_MIN_GAP_MS = 3600000UL;
+static constexpr double HISTORY_DISTANCE_DELTA_M = 1500.0;
+static constexpr unsigned long TRACK_SEND_RETRY_BACKOFF_MS = 60000UL;
 
 static unsigned long lastCurrentSendMS = 0;
 static unsigned long lastHistorySendMS = 0;

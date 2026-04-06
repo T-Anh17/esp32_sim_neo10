@@ -136,7 +136,7 @@ static void sendWarning() {
 // This powers SIGNAL_4G/SIGNAL_WIFI/SIGNAL_CSQ_RAW/SIGNAL_RSSI_RAW
 // which are read by the [MON] monitor task.
 // ============================================================
-#define SAMPLE_INTERVAL_MS 10000
+#define SAMPLE_INTERVAL_MS 60000
 #define HISTORY_SIZE 6
 
 void signalMonitorTask(void *pvParameters) {

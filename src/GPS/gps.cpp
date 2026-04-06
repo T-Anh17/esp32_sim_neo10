@@ -71,10 +71,10 @@ static void applyGpsAcquisitionProfile() {
 static void applyGpsTrackingProfile() {
   if (gpsTrackingProfileApplied)
     return;
-  sendUBX(CFG_RATE_5HZ, sizeof(CFG_RATE_5HZ));
+  sendUBX(CFG_RATE_1HZ, sizeof(CFG_RATE_1HZ));
   vTaskDelay(pdMS_TO_TICKS(20));
   gpsTrackingProfileApplied = true;
-  logLine("[GPS] Tracking profile applied (5Hz)");
+  logLine("[GPS] Tracking profile applied (1Hz low-power)");
 }
 
 static bool gpsHasRealFix() {
@@ -635,7 +635,7 @@ void gpsTask(void *pvParameters) {
 
     gpsAttemptRecovery(transport);
 
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 

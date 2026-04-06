@@ -12,7 +12,6 @@
 #include "buzzer/buzzer.h"
 #include "geofencing/geofencing.h"
 #include "signal/SignalMonitor.h"
-#include "strip/strip.h"
 #include "tracking/tracking.h"
 #include "webserver/webserver.h"
 #include "network_location/location.h"

@@ -7,11 +7,11 @@
 #include <WiFiClientSecure.h>
 #include <time.h>
 
-static constexpr unsigned long NETLOC_RECHECK_WHEN_GPS_FRESH_MS = 300000UL;
-static constexpr unsigned long NETLOC_REFRESH_NO_GPS_MS = 1800000UL;
+static constexpr unsigned long NETLOC_RECHECK_WHEN_GPS_FRESH_MS = 1800000UL;
+static constexpr unsigned long NETLOC_REFRESH_NO_GPS_MS = 10800000UL;
 static constexpr int NETLOC_MAX_WIFI_APS = 10;
-static constexpr unsigned long WIFI_SCAN_CACHE_MS = 900000UL;
-static constexpr unsigned long WIFI_GEO_TRANSPORT_BACKOFF_MS = 900000UL;
+static constexpr unsigned long WIFI_SCAN_CACHE_MS = 1800000UL;
+static constexpr unsigned long WIFI_GEO_TRANSPORT_BACKOFF_MS = 1800000UL;
 static String LAST_WIFI_SCAN_JSON = "{\"ok\":false,\"count\":0,\"aps\":[]}";
 static String LAST_WIFI_SCAN_COMPACT = "";
 static String LAST_WIFI_SCAN_GOOGLE_JSON = "";

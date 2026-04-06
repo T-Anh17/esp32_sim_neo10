@@ -52,7 +52,7 @@ static void onWiFiEvent(WiFiEvent_t event) {
 void initWiFi() {
   WiFi.persistent(false);
   WiFi.mode(WIFI_MODE_APSTA); // <-- THE ONLY WiFi.mode() call
-  WiFi.setSleep(WIFI_PS_NONE);
+  WiFi.setSleep(WIFI_PS_MIN_MODEM);
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(onWiFiEvent);
 
@@ -84,7 +84,7 @@ void wifiEnterScanMode() {
 
 void wifiRestoreApStaMode() {
   WiFi.mode(WIFI_MODE_APSTA);
-  WiFi.setSleep(WIFI_PS_NONE);
+  WiFi.setSleep(WIFI_PS_MIN_MODEM);
   configureSoftAp();
   if (strlen(SSID_Name) > 0)
     startStaConnect();
