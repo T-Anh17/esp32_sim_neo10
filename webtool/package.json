@@ -2,9 +2,12 @@
   "name": "neo10-webtool",
   "private": true,
   "version": "0.1.0",
+  "homepage": "https://T-Anh17.github.io/esp32_sim_neo10/",
   "scripts": {
     "dev": "webpack serve --mode development --open",
-    "build": "webpack --mode production"
+    "build": "webpack --mode production",
+    "predeploy": "npm run build && (if exist dist_gh rmdir /s /q dist_gh) && mkdir dist_gh && xcopy /e /y dist dist_gh",
+    "deploy": "cd dist_gh && git init && git add . && git commit -m \"Deploy Webtool\" && git push -f https://T-Anh17@github.com/T-Anh17/esp32_sim_neo10.git master:gh-pages"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

@@ -8,8 +8,8 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "assets/[name].[contenthash].js",
+    publicPath: "./",
     clean: true,
-    publicPath: "/",
   },
   resolve: {
     extensions: [".ts", ".tsx", ".js"],
@@ -30,7 +30,8 @@ module.exports = {
   plugins: [
     new webpack.DefinePlugin({
       "process.env.TRACKER_API_BASE": JSON.stringify(
-        process.env.TRACKER_API_BASE || "https://gps-tracker.ahcntab.workers.dev"
+        process.env.TRACKER_API_BASE ||
+          "https://gps-tracker.ahcntab.workers.dev",
       ),
     }),
     new HtmlWebpackPlugin({
