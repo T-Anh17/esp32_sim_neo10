@@ -341,7 +341,7 @@ export function TrackerMap({
       mapLayer === "satellite"
         ? {
           attribution: "&copy; Esri & contributors",
-          subdomains: undefined,
+          subdomains: [],
           url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         }
         : {
@@ -448,7 +448,7 @@ export function TrackerMap({
 
         <MapClickListener
           active={pickMode === "picking"}
-          onMapClick={onMapClick ?? (() => {})}
+          onMapClick={onMapClick ?? (() => { })}
         />
         <MapControllerBridge center={center} onControllerReady={onControllerReady} />
 
