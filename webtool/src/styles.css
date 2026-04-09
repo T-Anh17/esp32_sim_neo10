@@ -1589,4 +1589,9 @@ input {
   .gmaps-map-label--company {
     max-width: 180px;
   }
+
+  .gmaps-sidebar__bottom,
+  .gmaps-attribution {
+    display: none;
+  }
 }
