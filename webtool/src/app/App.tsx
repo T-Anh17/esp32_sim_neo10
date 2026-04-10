@@ -69,6 +69,7 @@ export function App() {
   const [draftHome, setDraftHome] = useState<{ lat: number; lng: number } | null>(null);
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>("saved");
   const [mapController, setMapController] = useState<TrackerMapController | null>(null);
+  const [scaleBar, setScaleBar] = useState({ label: "10 mét", width: 54 });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.innerWidth <= 640;
@@ -595,6 +596,7 @@ export function App() {
             locale={locale}
             onMapClick={handleMapClick}
             onControllerReady={setMapController}
+            onScaleChange={setScaleBar}
             pickMode={pickMode}
             routeMode={routeMode}
             selectedDeviceId={selectedDeviceId}
@@ -656,8 +658,11 @@ export function App() {
           </div>
 
           <div className="gmaps-scale-bar">
-            <span className="gmaps-scale-bar__line" />
-            <span>10 mét</span>
+            <span
+              className="gmaps-scale-bar__line"
+              style={{ width: `${scaleBar.width}px` }}
+            />
+            <span>{scaleBar.label}</span>
           </div>
         </section>
       </main>

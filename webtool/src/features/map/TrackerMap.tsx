@@ -1,5 +1,5 @@
 import "leaflet/dist/leaflet.css";
-import { divIcon } from "leaflet";
+import { divIcon, point } from "leaflet";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useMap, useMapEvents } from "react-leaflet";
 import {
@@ -39,6 +39,7 @@ type TrackerMapProps = {
   draftHome: { lat: number; lng: number } | null;
   onControllerReady?: (controller: TrackerMapController | null) => void;
   onMapClick?: (lat: number, lng: number) => void;
+  onScaleChange?: (details: { label: string; width: number }) => void;
 };
 
 type RouteRequest = {
@@ -146,6 +147,58 @@ function getHistoryLabel(kind: "start" | "latest", locale: Locale): string {
 
 function formatHistoryPointTooltip(point: TrackerHistoryPoint): string {
   return `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
+}
+
+function formatScaleLabel(distanceM: number): string {
+  if (distanceM >= 1000) {
+    const km = (distanceM / 1000).toFixed(1).replace(/\.0$/, "");
+    return `${km} km`;
+  }
+  return `${Math.round(distanceM)} mét`;
+}
+
+function computeScaleDetails(map: any) {
+  const size = map.getSize();
+  const y = Math.round(size.y / 2);
+  const left = map.containerPointToLatLng(point(16, y));
+  const right = map.containerPointToLatLng(point(96, y));
+  const meters = map.distance(left, right);
+
+  const candidates = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000];
+  const target = Math.max(5, meters);
+  const distanceM = candidates.find((candidate) => candidate >= target * 0.6) ?? candidates[candidates.length - 1];
+  const width = Math.round((distanceM / meters) * 80);
+
+  return {
+    label: formatScaleLabel(distanceM),
+    width: Math.max(32, Math.min(width, 120)),
+  };
+}
+
+function ScaleObserver({
+  onScaleChange,
+}: {
+  onScaleChange?: (details: { label: string; width: number }) => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!onScaleChange) return;
+
+    const update = () => {
+      const details = computeScaleDetails(map);
+      onScaleChange(details);
+    };
+
+    update();
+    map.on("zoomend moveend resize", update);
+
+    return () => {
+      map.off("zoomend moveend resize", update);
+    };
+  }, [map, onScaleChange]);
+
+  return null;
 }
 
 function downsamplePositions(
@@ -303,6 +356,7 @@ export function TrackerMap({
   draftHome,
   onControllerReady,
   onMapClick,
+  onScaleChange,
 }: TrackerMapProps) {
   const [roadRoutes, setRoadRoutes] = useState<RoadRoute[]>([]);
 
@@ -455,6 +509,7 @@ export function TrackerMap({
           onMapClick={onMapClick ?? (() => { })}
         />
         <MapControllerBridge center={center} onControllerReady={onControllerReady} />
+        <ScaleObserver onScaleChange={onScaleChange} />
 
         {visibleDevices.map((device) =>
           device.deviceId === selectedDeviceId ? (
