@@ -81,6 +81,10 @@ export function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
+  const toggleTheme = () => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  };
+
   const copy = translations[locale];
   const onlineCount = devices.filter((device) => device.online).length;
   const selectedDevice = useMemo(
@@ -456,13 +460,7 @@ export function App() {
             >
               {locale === "vi" ? "EN" : "VI"}
             </button>
-            <button
-              className="gmaps-sidebar__tool-button"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              type="button"
-            >
-              {theme === "dark" ? "Sáng" : "Tối"}
-            </button>
+
           </div>
         </div>
       </aside>
@@ -606,6 +604,29 @@ export function App() {
             <button className="gmaps-avatar" type="button" aria-label="Profile">
               <span className="gmaps-avatar__face" />
             </button>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: "0.4rem",
+                marginBottom: "0.2rem",
+                marginRight: 0,
+              }}
+            >
+              <span className="theme-icon" style={{ fontSize: "1.4rem" }}>
+                {theme === "dark" ? "🌙" : "☀️"}
+              </span>
+              <label className="theme-switch" htmlFor="checkbox">
+                <input
+                  type="checkbox"
+                  id="checkbox"
+                  onChange={toggleTheme}
+                  checked={theme === "light"}
+                />
+                <div className="slider round" />
+              </label>
+            </div>
           </div>
         </div>
 
