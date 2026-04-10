@@ -493,14 +493,14 @@ export function App() {
                   top: "100%",
                   left: 0,
                   right: 0,
-                  backgroundColor: "white",
-                  border: "1px solid #ccc",
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border)",
                   borderRadius: "4px",
                   maxHeight: "300px",
                   overflowY: "auto",
                   zIndex: 1000,
                   marginTop: "4px",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+                  boxShadow: "var(--shadow-1)"
                 }}>
                   {searchResults.map((result, index) => (
                     <div
@@ -508,18 +508,18 @@ export function App() {
                       onClick={() => handleSelectSearchResult(result.lat, result.lng, result.name)}
                       style={{
                         padding: "12px 16px",
-                        borderBottom: index < searchResults.length - 1 ? "1px solid #eee" : "none",
+                        borderBottom: index < searchResults.length - 1 ? "1px solid var(--border)" : "none",
                         cursor: "pointer",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = "#f5f5f5";
+                        e.currentTarget.style.backgroundColor = "var(--bg-muted)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = "transparent";
                       }}
                     >
                       <div style={{ fontSize: "14px", fontWeight: "500" }}>{result.name}</div>
-                      <div style={{ fontSize: "12px", color: "#666" }}>
+                      <div style={{ fontSize: "12px", color: "var(--text-faint)" }}>
                         {result.lat.toFixed(4)}, {result.lng.toFixed(4)}
                       </div>
                     </div>
@@ -533,14 +533,15 @@ export function App() {
                   top: "100%",
                   left: 0,
                   right: 0,
-                  backgroundColor: "white",
-                  border: "1px solid #ccc",
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border)",
                   borderRadius: "4px",
                   padding: "12px 16px",
                   marginTop: "4px",
                   textAlign: "center",
                   fontSize: "14px",
-                  color: "#666"
+                  color: "var(--text-soft)",
+                  boxShadow: "var(--shadow-1)"
                 }}>
                   Tìm kiếm...
                 </div>

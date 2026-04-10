@@ -29,19 +29,19 @@ class AppErrorBoundary extends React.Component<
             minHeight: "100vh",
             padding: "24px",
             fontFamily: "Roboto, Segoe UI, sans-serif",
-            background: "#f8f9fa",
-            color: "#202124",
+            background: "var(--bg-app)",
+            color: "var(--text-main)",
           }}
         >
           <h1 style={{ margin: "0 0 12px", fontSize: "24px" }}>Ứng dụng gặp lỗi runtime</h1>
-          <p style={{ margin: "0 0 12px", color: "#5f6368" }}>
+          <p style={{ margin: "0 0 12px", color: "var(--text-soft)" }}>
             Trang không còn trắng hoàn toàn nữa. Đây là lỗi đang chặn giao diện hiển thị:
           </p>
           <pre
             style={{
               padding: "16px",
-              background: "#fff",
-              border: "1px solid #dadce0",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
               borderRadius: "12px",
               overflow: "auto",
               whiteSpace: "pre-wrap",
