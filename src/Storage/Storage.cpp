@@ -1,12 +1,14 @@
 #include "Storage.h"
 #include <Arduino.h>
 
+#include "esp_mac.h"
+
 static void buildDefaultDeviceIdentity(char *deviceId, size_t deviceIdLen,
                                        char *deviceName, size_t deviceNameLen) {
-  uint64_t mac = ESP.getEfuseMac();
-  uint32_t suffix = static_cast<uint32_t>(mac & 0xFFFFFF);
-  snprintf(deviceId, deviceIdLen, "tracker-%06lX", (unsigned long)suffix);
-  snprintf(deviceName, deviceNameLen, "Tracker %06lX", (unsigned long)suffix);
+  uint8_t mac[6];
+  esp_efuse_mac_get_default(mac);
+  snprintf(deviceId, deviceIdLen, "tracker-%02X%02X%02X", mac[3], mac[4], mac[5]);
+  snprintf(deviceName, deviceNameLen, "Tracker %02X%02X%02X", mac[3], mac[4], mac[5]);
 }
 
 // ============================================================
@@ -112,6 +114,28 @@ void loadDataFromRom() {
   nvsReadStr("DEV_ID", cfg.deviceId, sizeof(cfg.deviceId), defaultDeviceId);
   nvsReadStr("DEV_NAME", cfg.deviceName, sizeof(cfg.deviceName),
              defaultDeviceName);
+
+  // --- BUG FIX FOR WRONG MAC ---
+  // If the deviceId matches the OLD BUGGY extraction, auto-fix it
+  uint64_t oldMacVal = ESP.getEfuseMac();
+  uint32_t buggySuffix = static_cast<uint32_t>(oldMacVal & 0xFFFFFF);
+  char buggyDeviceId[CONFIG_DEVICE_ID_LEN];
+  snprintf(buggyDeviceId, sizeof(buggyDeviceId), "tracker-%06lX", (unsigned long)buggySuffix);
+
+  if (strcmp(cfg.deviceId, buggyDeviceId) == 0) {
+    logPrintf("[STORAGE] Auto-fixing invalid MAC in Device ID: %s -> %s", cfg.deviceId, defaultDeviceId);
+    strncpy(cfg.deviceId, defaultDeviceId, sizeof(cfg.deviceId));
+    nvs_set_str(nvsHandle, "DEV_ID", cfg.deviceId);
+
+    char buggyDeviceName[CONFIG_DEVICE_NAME_LEN];
+    snprintf(buggyDeviceName, sizeof(buggyDeviceName), "Tracker %06lX", (unsigned long)buggySuffix);
+    if (strcmp(cfg.deviceName, buggyDeviceName) == 0) {
+      strncpy(cfg.deviceName, defaultDeviceName, sizeof(cfg.deviceName));
+      nvs_set_str(nvsHandle, "DEV_NAME", cfg.deviceName);
+    }
+    nvs_commit(nvsHandle);
+  }
+  // -----------------------------
 
   // Phone numbers
   nvsReadStr("CALL_1", cfg.call1, sizeof(cfg.call1), DEFAULT_PHONE);

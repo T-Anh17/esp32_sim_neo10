@@ -1,6 +1,6 @@
 #include "tracking.h"
-#include "ConnectionManager.h"
 #include "Config.h"
+#include "ConnectionManager.h"
 #include "DATAEG/SIM7680C.h"
 #include "GPS/gps.h"
 #include "geofencing/geofencing.h"
@@ -34,7 +34,10 @@ static bool hasHistorySnapshot = false;
 static unsigned long lastTrackingNetlocAttemptMs = 0;
 static ConnectionManager connectionManager;
 static constexpr unsigned long TRACK_NETLOC_RETRY_MS = 60000UL;
-
+static constexpr unsigned long SOURCE_SWITCH_COOLDOWN_MS =
+    600000UL; // 10 phút cooldown cho việc đổi nguồn lấy vị trí
+static bool wasGpsReadyGlobal =
+    false; // Theo dõi trạng thái GPS toàn cục để kích hoạt Turbo Send
 void Tracking_Init() { logLine("[TRACK] Init"); }
 
 static bool isValidCoordPair(double lat, double lng) {
@@ -68,9 +71,28 @@ static bool shouldSendCurrentSnapshot(const BestLocationResult &loc,
   if (!hasCurrentSnapshot)
     return true;
 
-  if (loc.source != lastCurrentSource)
-    return true;
+  // --- BỘ LỌC FLIP-FLOP NGUỒN VỊ TRÍ ---
+  if (loc.source != lastCurrentSource) {
+    // TRƯỜNG HỢP 1: Nâng cấp chất lượng (Từ LBS/WiFi/None lên GPS)
+    // Cho phép gửi ngay lập tức để cập nhật vị trí chính xác nhất lên Cloud
+    if (loc.source == LOC_GPS && lastCurrentSource != LOC_GPS) {
+      logLine("[TRACK] Nguồn nâng cấp lên GPS -> Cho phép gửi ngay");
+      return true;
+    }
 
+    // TRƯỜNG HỢP 2: Hạ cấp chất lượng (Từ GPS rớt xuống LBS/WiFi do vào
+    // nhà/nhiễu) BẮT BUỘC phải đợi ít nhất 10 phút mới cho phép cập nhật lại
+    // nguồn thấp hơn Điều này ngăn chặn việc nhảy LBS liên tục làm tốn Request
+    // khi đứng yên
+    if ((nowMs - lastCurrentSendMS) < SOURCE_SWITCH_COOLDOWN_MS) {
+      return false;
+    }
+
+    logLine("[TRACK] Đổi nguồn vị trí (hết cooldown) -> Chấp nhận gửi");
+    return true;
+  }
+
+  // --- KIỂM TRA KHOẢNG CÁCH (Di chuyển > 500m) ---
   const double movedM =
       distanceBetweenMeters(loc.lat, loc.lng, lastCurrentLat, lastCurrentLng);
   if (movedM >= CURRENT_DISTANCE_DELTA_M &&
@@ -78,9 +100,11 @@ static bool shouldSendCurrentSnapshot(const BestLocationResult &loc,
     return true;
   }
 
+  // --- KIỂM TRA KHOẢNG THỜI GIAN ĐỊNH KỲ (Stationary vs Moving) ---
   const unsigned long intervalMs =
       isMovingNow(loc, speedKmph) ? cfg.trackingCurrentMovingIntervalMs
-                                  : cfg.trackingCurrentStationaryIntervalMs;
+                                  : cfg.trackingCurrentStationaryIntervalMs; //
+
   return (nowMs - lastCurrentSendMS) >= intervalMs;
 }
 
@@ -148,10 +172,9 @@ static String urlEncodeTrack(const String &input) {
   const char *hex = "0123456789ABCDEF";
   for (size_t i = 0; i < input.length(); ++i) {
     unsigned char c = static_cast<unsigned char>(input[i]);
-    const bool safe =
-        (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' ||
-        c == '~';
+    const bool safe = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                      (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+                      c == '.' || c == '~';
     if (safe) {
       out += static_cast<char>(c);
     } else {
@@ -290,7 +313,8 @@ static String buildTrackingFallbackGetUrl(const ConfigSnapshot &cfg,
 }
 
 static bool canAttemptTrackingNetloc() {
-  return WiFi.status() == WL_CONNECTED || SIM_hasCapability(SIM_CAP_VOICE_SMS_OK);
+  return WiFi.status() == WL_CONNECTED ||
+         SIM_hasCapability(SIM_CAP_VOICE_SMS_OK);
 }
 
 // ============================================================
@@ -303,63 +327,64 @@ void Tracking_Loop() {
   getConfigSnapshot(&cfg);
   BestLocationResult loc = getBestAvailableLocation();
 
-  if ((!loc.valid || loc.source == LOC_HOME) && cfg.netlocEnable &&
-      canAttemptTrackingNetloc() &&
-      (lastTrackingNetlocAttemptMs == 0 ||
-       (nowMs - lastTrackingNetlocAttemptMs) >= TRACK_NETLOC_RETRY_MS)) {
-    lastTrackingNetlocAttemptMs = nowMs;
-    if (acquireNetworkLocationNow()) {
-      BestLocationResult refreshed = getBestAvailableLocation();
-      if (refreshed.valid)
-        loc = refreshed;
-    }
+  // --- 1. CƠ CHẾ PHÁ BĂNG (TURBO SEND) ---
+  // Mục tiêu: Xóa bỏ "án treo" 60s ngay khi vừa bước ra ngoài trời và có GPS
+  if (loc.source == LOC_GPS && !wasGpsReadyGlobal) {
+    lastFailedSendMs = 0; // Reset thời gian chặn lỗi (Backoff)
+    lastCurrentSendMS =
+        0; // Reset thời gian gửi lần cuối để ép gửi tin mới ngay
+    wasGpsReadyGlobal = true;
+    logLine(
+        "[TRACK] PHÁ BĂNG: Phát hiện GPS Fix mới. Ưu tiên gửi tin tức thì!");
+  } else if (loc.source != LOC_GPS) {
+    wasGpsReadyGlobal = false;
   }
 
-  if (!loc.valid)
-    return;
-
-  // Don't auto-track HOME fallback. It is only a rough placeholder and causes
-  // noisy retries before the device has obtained any live location.
-  if (loc.source == LOC_HOME)
-    return;
-
+  // --- 2. KIỂM TRA ĐIỀU KIỆN CHẶN (BACKOFF) ---
+  // Nếu vừa gửi lỗi, phải đợi đúng 60s mới cho thử lại (trừ khi vừa có GPS Fix
+  // ở bước 1)
   if (lastFailedSendMs > 0 &&
       (nowMs - lastFailedSendMs) < TRACK_SEND_RETRY_BACKOFF_MS) {
     return;
   }
 
+  // --- 3. KIỂM TRA VỊ TRÍ HỢP LỆ ---
+  if (!loc.valid || loc.source == LOC_HOME)
+    return;
+
   const float speedKmph = readCurrentSpeedKmph();
-  const bool forceFreshNetloc = shouldForceSendFreshNetworkLocation(loc);
   const bool sendCurrent =
-      forceFreshNetloc || shouldSendCurrentSnapshot(loc, speedKmph, nowMs, cfg);
+      shouldSendCurrentSnapshot(loc, speedKmph, nowMs, cfg);
   const bool writeHistory =
       shouldWriteHistorySample(loc, speedKmph, nowMs, cfg);
 
   if (!sendCurrent && !writeHistory)
     return;
 
-  logPrintf("[TRACK] sending src=%s lat=%.6f lng=%.6f acc=%.1f age=%lu hist=%d",
+  // --- 4. THỰC THI GỬI DỮ LIỆU ---
+  logPrintf("[TRACK] Gửi dữ liệu: Nguồn=%s Lat=%.6f Lng=%.6f Acc=%.1f Hist=%d",
             locationSourceName(loc.source), loc.lat, loc.lng, loc.accuracyM,
-            loc.ageMs, writeHistory ? 1 : 0);
-  if (forceFreshNetloc) {
-    logLine("[TRACK] forcing immediate send for fresh network location");
-  }
+            writeHistory ? 1 : 0);
 
-  const String payload = serializeTrackingPayload(false, cfg, loc, writeHistory);
-  const String fallbackUrl = buildTrackingFallbackGetUrl(cfg, payload);
+  const String payload =
+      serializeTrackingPayload(false, cfg, loc, writeHistory);
+  const String fallbackUrl = buildTrackingFallbackGetUrl(cfg, payload); //
+
+  // Gọi qua ConnectionManager để xử lý cả WiFi, SIM POST và SIM GET Fallback
   bool sendOK =
       connectionManager.sendTrackingPayload(payload, cfg, fallbackUrl);
 
   if (sendOK) {
-    lastFailedSendMs = 0;
-    rememberCurrentSnapshot(loc, nowMs);
+    lastFailedSendMs = 0; // Gửi thành công, xóa trạng thái lỗi
+    rememberCurrentSnapshot(
+        loc, nowMs); // Lưu lại trạng thái gửi thành công gần nhất
     if (writeHistory)
       rememberHistorySnapshot(loc, nowMs);
   } else {
-    lastFailedSendMs = nowMs;
+    lastFailedSendMs = nowMs; // Gửi thất bại, bắt đầu tính "án treo" 60 giây
+    logLine("[TRACK] Gửi thất bại. Bắt đầu giai đoạn Backoff 60s.");
   }
 }
-
 // ============================================================
 // One-shot test (for /track_test hidden endpoint)
 // ============================================================

@@ -515,7 +515,7 @@ bool SIM_getCellInfo(int *mcc, int *mnc, int *lac, int *cellId, String *radio) {
 // Send SMS to a specific number
 // ============================================================
 
-bool SMS_DRY_RUN = true; // Đặt là true để chỉ LOG, false để GỬI THẬT
+bool SMS_DRY_RUN = false; // Đặt là true để chỉ LOG, false để GỬI THẬT
 void SIM7680C_sendSMS_to(const char *number, const String &message) {
   if (!number || strlen(number) < 3)
     return;
