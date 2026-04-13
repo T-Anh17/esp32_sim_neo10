@@ -11,7 +11,7 @@ static constexpr unsigned long NETLOC_RECHECK_WHEN_GPS_FRESH_MS = 1800000UL;
 static constexpr unsigned long NETLOC_REFRESH_NO_GPS_MS = 10800000UL;
 static constexpr unsigned long NETLOC_BOOT_RETRY_MS = 15000UL;
 static constexpr unsigned long NETLOC_FAIL_RETRY_MS = 60000UL;
-static constexpr unsigned long NETLOC_READY_SETTLE_MS = 15000UL;
+static constexpr unsigned long NETLOC_READY_SETTLE_MS = 5000UL;
 static constexpr int NETLOC_MAX_WIFI_APS = 10;
 static constexpr unsigned long WIFI_SCAN_CACHE_MS = 1800000UL;
 static constexpr unsigned long WIFI_GEO_TRANSPORT_BACKOFF_MS = 1800000UL;
@@ -753,9 +753,7 @@ bool acquireNetworkLocationNow() {
 }
 
 void networkLocationTask(void *pvParameters) {
-  // Initial delay — give GPS and SIM time to attempt fix
-  vTaskDelay(pdMS_TO_TICKS(8000));
-
+  vTaskDelay(pdMS_TO_TICKS(3000));
   logLine("[NETLOC] Task started");
   unsigned long transportReadySinceMs = 0;
 
