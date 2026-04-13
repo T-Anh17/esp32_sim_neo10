@@ -7,15 +7,18 @@ import type { TrackerDeviceSummary } from "../../types/tracker";
 export type HomePickMode = "idle" | "picking";
 
 type HomePanelProps = {
+  activeDeviceId: string | null;
   copy: AppCopy;
   device: TrackerDeviceSummary | null;
   onCancelPick: () => void;
   onDraftChange: (pos: { lat: number; lng: number } | null) => void;
   onHomeCleared: () => void;
   onHomeSaved: (homeLat: number, homeLng: number, distanceToHomeM: number) => void;
+  onSelectDevice: (deviceId: string) => void;
   onStartPick: () => void;
   pendingPick: { lat: number; lng: number } | null;
   pickMode: HomePickMode;
+  selectedDevices: TrackerDeviceSummary[];
 };
 
 function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -41,15 +44,18 @@ function formatCoordPair(lat?: number, lng?: number, copy?: AppCopy) {
 }
 
 export function HomePanel({
+  activeDeviceId,
   copy,
   device,
   onCancelPick,
   onDraftChange,
   onHomeCleared,
   onHomeSaved,
+  onSelectDevice,
   onStartPick,
   pendingPick,
   pickMode,
+  selectedDevices,
 }: HomePanelProps) {
   const [latStr, setLatStr] = useState("");
   const [lngStr, setLngStr] = useState("");
@@ -145,6 +151,23 @@ export function HomePanel({
 
   return (
     <div className="place-pane">
+      {selectedDevices.length > 1 ? (
+        <label className="maps-field">
+          <span>{copy.homeTargetLabel}</span>
+          <select
+            className="maps-select"
+            onChange={(event) => onSelectDevice(event.target.value)}
+            value={activeDeviceId ?? ""}
+          >
+            {selectedDevices.map((selected) => (
+              <option key={selected.deviceId} value={selected.deviceId}>
+                {selected.deviceName || selected.deviceId}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
       <div className="maps-home-card">
         <div className="maps-home-card__icon">
           <AppIcon name="home" size={18} />
@@ -152,7 +175,7 @@ export function HomePanel({
         <div className="maps-home-card__body">
           <p className="maps-home-card__eyebrow">{copy.homePanel}</p>
           <strong className="maps-home-card__title">
-            {device.homeSet ? copy.homeSetLabel : copy.homeUnsetLabel}
+            {(device.deviceName || device.deviceId)} - {device.homeSet ? copy.homeSetLabel : copy.homeUnsetLabel}
           </strong>
           <p className="maps-home-card__address">{selectedAddress}</p>
         </div>

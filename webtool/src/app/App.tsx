@@ -56,7 +56,7 @@ export function App() {
   const [devices, setDevices] = useState<TrackerDeviceSummary[]>([]);
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [historyRange, setHistoryRange] = useState<HistoryRange>("24h");
-  const [history, setHistory] = useState<TrackerHistoryPoint[]>([]);
+  const [historyMap, setHistoryMap] = useState<Map<string, TrackerHistoryPoint[]>>(() => new Map());
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +81,8 @@ export function App() {
   const [searchResults, setSearchResults] = useState<Array<{ name: string; lat: number; lng: number }>>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [deviceListExpanded, setDeviceListExpanded] = useState(false);
+  const [homeTargetId, setHomeTargetId] = useState<string | null>(null);
 
   const toggleTheme = () => {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
@@ -98,6 +100,42 @@ export function App() {
     devices.forEach((device, index) => map.set(device.deviceId, getDeviceColor(index)));
     return map;
   }, [devices]);
+
+  const selectedDevices = useMemo(
+    () => devices.filter((device) => selectedDeviceIds.includes(device.deviceId)),
+    [devices, selectedDeviceIds],
+  );
+  const homeTargetDevice = useMemo(
+    () => selectedDevices.find((device) => device.deviceId === homeTargetId) ?? selectedDevices[0] ?? null,
+    [homeTargetId, selectedDevices],
+  );
+  const mergedHistoryPoints = useMemo(
+    () =>
+      Array.from(historyMap.values())
+        .flat()
+        .sort((a, b) => b.timestamp - a.timestamp),
+    [historyMap],
+  );
+  const totalHistoryPoints = mergedHistoryPoints.length;
+
+  const headerTitle = useMemo(() => {
+    if (selectedDeviceIds.length === 0) return copy.dashboardTitle;
+    if (selectedDeviceIds.length === 1) return selectedDevice?.deviceName ?? copy.noDeviceSelected;
+    return copy.devicesSelected(selectedDeviceIds.length);
+  }, [selectedDeviceIds.length, selectedDevice?.deviceName, copy]);
+  const historyTitle = useMemo(() => {
+    if (selectedDeviceIds.length <= 1) {
+      return copy.movementHistoryForDevice(selectedDevice?.deviceName ?? copy.noDeviceSelected);
+    }
+    return copy.movementHistoryForDevices(selectedDeviceIds.length);
+  }, [copy, selectedDevice?.deviceName, selectedDeviceIds.length]);
+
+  const COLLAPSED_DEVICE_COUNT = 3;
+  const visibleDeviceList = useMemo(() => {
+    if (deviceListExpanded || devices.length <= COLLAPSED_DEVICE_COUNT) return devices;
+    return devices.slice(0, COLLAPSED_DEVICE_COUNT);
+  }, [devices, deviceListExpanded]);
+  const hiddenDeviceCount = devices.length - COLLAPSED_DEVICE_COUNT;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -143,19 +181,29 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    setHomeTargetId((prev) => {
+      if (prev && selectedDeviceIds.includes(prev)) return prev;
+      return selectedDeviceIds[0] ?? null;
+    });
+  }, [selectedDeviceIds]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadHistory = async () => {
-      if (!primarySelectedId) {
-        setHistory([]);
+      if (selectedDeviceIds.length === 0) {
+        setHistoryMap(new Map());
+        setLoadingHistory(false);
         return;
       }
 
       try {
         setLoadingHistory(true);
-        const points = await fetchHistory(primarySelectedId, historyRange);
+        const entries = await Promise.all(
+          selectedDeviceIds.map(async (deviceId) => [deviceId, await fetchHistory(deviceId, historyRange)] as const),
+        );
         if (!cancelled) {
-          setHistory(points);
+          setHistoryMap(new Map(entries));
           setError(null);
         }
       } catch (err) {
@@ -171,12 +219,13 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [historyRange, primarySelectedId]);
+  }, [historyRange, selectedDeviceIds]);
 
   useEffect(() => {
     setPickMode("idle");
     setPendingPick(null);
-  }, [primarySelectedId]);
+    setDraftHome(null);
+  }, [homeTargetId]);
 
   const handleRename = async (deviceId: string, nextName: string) => {
     const trimmed = nextName.trim();
@@ -255,12 +304,13 @@ export function App() {
   };
 
   const handleHomeSaved = (homeLat: number, homeLng: number, distanceToHomeM: number) => {
+    if (!homeTargetId) return;
     setPendingPick(null);
     setDraftHome(null);
     setPickMode("idle");
     setDevices((prev) =>
       prev.map((device) =>
-        device.deviceId === primarySelectedId
+        device.deviceId === homeTargetId
           ? { ...device, distanceToHomeM, homeLat, homeLng, homeSet: true }
           : device,
       ),
@@ -268,12 +318,13 @@ export function App() {
   };
 
   const handleHomeCleared = () => {
+    if (!homeTargetId) return;
     setPendingPick(null);
     setDraftHome(null);
     setPickMode("idle");
     setDevices((prev) =>
       prev.map((device) =>
-        device.deviceId === primarySelectedId
+        device.deviceId === homeTargetId
           ? {
             ...device,
             distanceToHomeM: -1,
@@ -292,16 +343,16 @@ export function App() {
   const visibleDraftHome = useMemo(() => {
     if (!draftHome) return null;
     if (
-      selectedDevice?.homeSet &&
-      typeof selectedDevice.homeLat === "number" &&
-      typeof selectedDevice.homeLng === "number"
+      homeTargetDevice?.homeSet &&
+      typeof homeTargetDevice.homeLat === "number" &&
+      typeof homeTargetDevice.homeLng === "number"
     ) {
-      const sameLat = Math.abs(selectedDevice.homeLat - draftHome.lat) < 0.000001;
-      const sameLng = Math.abs(selectedDevice.homeLng - draftHome.lng) < 0.000001;
+      const sameLat = Math.abs(homeTargetDevice.homeLat - draftHome.lat) < 0.000001;
+      const sameLng = Math.abs(homeTargetDevice.homeLng - draftHome.lng) < 0.000001;
       if (sameLat && sameLng) return null;
     }
     return draftHome;
-  }, [draftHome, selectedDevice]);
+  }, [draftHome, homeTargetDevice]);
 
   const placeTabs = [
     { id: "overview" as const, label: copy.overviewLabel },
@@ -361,7 +412,7 @@ export function App() {
                     <div className="place-sheet__header-row">
                       <div>
                         <div className="place-sheet__headline">
-                          {selectedDevice?.deviceName ?? copy.noDeviceSelected}
+                          {headerTitle}
                         </div>
                         <div className="place-sheet__subline">
                           {lastUpdatedAt
@@ -369,18 +420,26 @@ export function App() {
                             : copy.noDeviceSelected}
                         </div>
                       </div>
-                      <span className="maps-info-badge">
-                        {onlineCount}/{devices.length} online
-                      </span>
+                      <div className="place-sheet__header-badges">
+                        <span className="maps-info-badge">
+                          {onlineCount}/{devices.length} online
+                        </span>
+                        {selectedDeviceIds.length > 0 && (
+                          <span className="maps-info-badge maps-info-badge--selected">
+                            {copy.selectedCount(selectedDeviceIds.length, devices.length)}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {devices.length > 0 ? (
                       <div className="place-sheet__device-row">
                         <span>{copy.deviceLabel}</span>
                         <div className="place-sheet__device-list">
-                          {devices.map((device, index) => {
+                          {visibleDeviceList.map((device, index) => {
+                            const actualIndex = devices.indexOf(device);
                             const color =
-                              deviceColorMap.get(device.deviceId) ?? getDeviceColor(index);
+                              deviceColorMap.get(device.deviceId) ?? getDeviceColor(actualIndex);
                             const checked = selectedDeviceIds.includes(device.deviceId);
 
                             return (
@@ -403,12 +462,28 @@ export function App() {
                                 <span className="device-picker-row__name">
                                   {device.deviceName || device.deviceId}
                                 </span>
+                                {device.homeSet && (
+                                  <span className="device-picker-row__home" title="Home set">🏠</span>
+                                )}
                                 <span
                                   className={`device-picker-row__status ${device.online ? "online" : "offline"}`}
                                 />
                               </label>
                             );
                           })}
+                          {devices.length > COLLAPSED_DEVICE_COUNT && (
+                            <button
+                              className="device-picker-row device-picker-row--toggle"
+                              onClick={() => setDeviceListExpanded((prev) => !prev)}
+                              type="button"
+                            >
+                              <span className="device-picker-row__name device-picker-row__name--toggle">
+                                {deviceListExpanded
+                                  ? copy.showLessDevices
+                                  : copy.showMoreDevices(hiddenDeviceCount)}
+                              </span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ) : null}
@@ -420,7 +495,8 @@ export function App() {
                     {sidebarSection === "saved" ? (
                       <DeviceDetails
                         copy={copy}
-                        device={selectedDevice}
+                        selectedDevices={selectedDevices}
+                        deviceColorMap={deviceColorMap}
                         loading={loadingDevices}
                         onFetchCurrentLocation={handleFetchCurrentLocation}
                         onRename={handleRename}
@@ -429,15 +505,18 @@ export function App() {
 
                     {sidebarSection === "home" ? (
                       <HomePanel
+                        activeDeviceId={homeTargetDevice?.deviceId ?? null}
                         copy={copy}
-                        device={selectedDevice}
+                        device={homeTargetDevice}
                         onCancelPick={() => setPickMode("idle")}
                         onDraftChange={setDraftHome}
                         onHomeCleared={handleHomeCleared}
                         onHomeSaved={handleHomeSaved}
+                        onSelectDevice={setHomeTargetId}
                         onStartPick={() => setPickMode("picking")}
                         pendingPick={pendingPick}
                         pickMode={pickMode}
+                        selectedDevices={selectedDevices}
                       />
                     ) : null}
                   </div>
@@ -447,12 +526,10 @@ export function App() {
                   <div className="place-sheet__header">
                     <div className="place-sheet__header-row">
                       <div>
-                        <div className="place-sheet__headline">
-                          {copy.movementHistory} của {selectedDevice?.deviceName ?? copy.noDeviceSelected}
-                        </div>
+                        <div className="place-sheet__headline">{historyTitle}</div>
                       </div>
                       <span className="maps-info-badge">
-                        {history.length} {copy.pointsLabel}
+                        {totalHistoryPoints} {copy.pointsLabel}
                       </span>
                     </div>
                   </div>
@@ -474,10 +551,11 @@ export function App() {
                     {error ? <div className="maps-inline-alert maps-inline-alert--error">{error}</div> : null}
                     <HistoryTimeline
                       copy={copy}
+                      deviceColorMap={deviceColorMap}
+                      historyMap={historyMap}
                       loading={loadingHistory}
                       locale={locale}
-                      points={history}
-                      selectedDeviceName={selectedDevice?.deviceName ?? null}
+                      selectedDevices={selectedDevices}
                     />
                   </div>
                 </>
@@ -495,7 +573,6 @@ export function App() {
             >
               {locale === "vi" ? copy.englishLabel : copy.vietnameseLabel}
             </button>
-
           </div>
         </div>
       </aside>
@@ -672,7 +749,8 @@ export function App() {
             devices={devices}
             draftHome={visibleDraftHome}
             draftPendingLabel={copy.draftPendingLabel}
-            history={history}
+            historyMap={historyMap}
+            historyLegendLabel={copy.historyLegend}
             homeLabel={copy.homeLabel}
             historyStartLabel={copy.historyStartLabel}
             historyLatestLabel={copy.historyLatestLabel}

@@ -68,11 +68,13 @@ export type AppCopy = {
   homeSaved: string;
   homeCleared: string;
   homeSaving: string;
+  homeTargetLabel: string;
   routeToHome: string;
   routeModeOff: string;
   routeModeSelected: string;
   routeModeAll: string;
   historyToggle: string;
+  historyLegend: string;
   historyStartLabel: string;
   historyLatestLabel: string;
   deviceLabel: string;
@@ -88,6 +90,13 @@ export type AppCopy = {
   useCurrentPos: string;
   geoRadiusLabel: string;
   geoRadiusHint: string;
+  dashboardTitle: string;
+  devicesSelected: (count: number) => string;
+  movementHistoryForDevice: (name: string) => string;
+  movementHistoryForDevices: (count: number) => string;
+  showMoreDevices: (count: number) => string;
+  showLessDevices: string;
+  selectedCount: (sel: number, total: number) => string;
 };
 
 export const translations: Record<Locale, AppCopy> = {
@@ -164,11 +173,13 @@ export const translations: Record<Locale, AppCopy> = {
     homeSaved: "Home saved ✓",
     homeCleared: "Home cleared",
     homeSaving: "Saving…",
+    homeTargetLabel: "Set home for",
     routeToHome: "Route to Home",
     routeModeOff: "Route: Off",
-    routeModeSelected: "Route: Selected Device",
+    routeModeSelected: "Route: Selected Devices",
     routeModeAll: "Route: All Devices",
     historyToggle: "History",
+    historyLegend: "History",
     historyStartLabel: "Start",
     historyLatestLabel: "Latest",
     deviceLabel: "Device",
@@ -184,6 +195,13 @@ export const translations: Record<Locale, AppCopy> = {
     useCurrentPos: "Use current position",
     geoRadiusLabel: "Geofence radius (m)",
     geoRadiusHint: "Leave 0 to disable geofence",
+    dashboardTitle: "GPS Tracker Dashboard",
+    devicesSelected: (count: number) => `${count} devices selected`,
+    movementHistoryForDevice: (name: string) => `Movement history for ${name}`,
+    movementHistoryForDevices: (count: number) => `Movement history - ${count} devices`,
+    showMoreDevices: (count: number) => `+${count} more`,
+    showLessDevices: "Show less",
+    selectedCount: (sel: number, total: number) => `Selected: ${sel}/${total}`,
   },
   vi: {
     appEyebrow: "NEO10 Fleet",
@@ -258,11 +276,13 @@ export const translations: Record<Locale, AppCopy> = {
     homeSaved: "Đã lưu HOME ✓",
     homeCleared: "Đã xóa HOME",
     homeSaving: "Đang lưu…",
+    homeTargetLabel: "Đặt HOME cho",
     routeToHome: "Đường về HOME",
     routeModeOff: "Chỉ đường: Tắt",
-    routeModeSelected: "Chỉ đường: Thiết bị chọn",
+    routeModeSelected: "Chỉ đường: Các thiết bị đã chọn",
     routeModeAll: "Chỉ đường: Tất cả",
     historyToggle: "Lịch sử",
+    historyLegend: "Lịch sử",
     historyStartLabel: "Bắt đầu",
     historyLatestLabel: "Mới nhất",
     deviceLabel: "Thiết bị",
@@ -278,6 +298,13 @@ export const translations: Record<Locale, AppCopy> = {
     useCurrentPos: "Dùng vị trí hiện tại",
     geoRadiusLabel: "Bán kính hàng rào (m)",
     geoRadiusHint: "Để 0 để tắt hàng rào địa lý",
+    dashboardTitle: "Bảng điều khiển GPS",
+    devicesSelected: (count: number) => `${count} thiết bị đang chọn`,
+    movementHistoryForDevice: (name: string) => `Lịch sử di chuyển của ${name}`,
+    movementHistoryForDevices: (count: number) => `Lịch sử di chuyển - ${count} thiết bị`,
+    showMoreDevices: (count: number) => `+${count} thiết bị nữa`,
+    showLessDevices: "Thu gọn",
+    selectedCount: (sel: number, total: number) => `Đã chọn: ${sel}/${total}`,
   },
 };
 

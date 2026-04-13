@@ -1,6 +1,6 @@
 import "leaflet/dist/leaflet.css";
 import { divIcon, point } from "leaflet";
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useMap, useMapEvents } from "react-leaflet";
 import {
   Circle,
@@ -26,9 +26,10 @@ export type TrackerMapController = {
 
 type TrackerMapProps = {
   devices: TrackerDeviceSummary[];
-  history: TrackerHistoryPoint[];
+  historyMap: Map<string, TrackerHistoryPoint[]>;
   homeLabel: string;
   draftPendingLabel: string;
+  historyLegendLabel: string;
   historyStartLabel: string;
   historyLatestLabel: string;
   locale: Locale;
@@ -332,9 +333,10 @@ function MapControllerBridge({
 
 export function TrackerMap({
   devices,
-  history,
+  historyMap,
   homeLabel,
   draftPendingLabel,
+  historyLegendLabel,
   historyStartLabel,
   historyLatestLabel,
   locale,
@@ -360,26 +362,28 @@ export function TrackerMap({
     () => new Set(selectedDeviceIds),
     [selectedDeviceIds]
   );
-  const primarySelectedId = selectedDeviceIds[0] ?? null;
-  const visibleHistory = useMemo(
+  const selectedHistoryGroups = useMemo(
     () =>
-      history.filter(
-        (p) => isValidPair(p.lat, p.lng) && !isBootstrapHistoryPoint(p)
-      ).sort((a, b) => a.timestamp - b.timestamp),
-    [history]
+      selectedDeviceIds
+        .map((deviceId) => {
+          const device = devices.find((item) => item.deviceId === deviceId) ?? null;
+          const points = (historyMap.get(deviceId) ?? [])
+            .filter(
+              (point) =>
+                isValidPair(point.lat, point.lng) && !isBootstrapHistoryPoint(point),
+            )
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+          return {
+            color: deviceColorMap.get(deviceId) ?? "#2563eb",
+            deviceId,
+            deviceName: device?.deviceName || points[0]?.deviceName || deviceId,
+            points,
+          };
+        })
+        .filter((group) => group.points.length > 0),
+    [deviceColorMap, devices, historyMap, selectedDeviceIds],
   );
-  const historyStart = visibleHistory[0] ?? null;
-  const historyLatest = visibleHistory[visibleHistory.length - 1] ?? null;
-  const intermediateHistory =
-    visibleHistory.length > 2 ? visibleHistory.slice(1, -1) : [];
-  const shouldShowHistoryStart =
-    historyStart !== null &&
-    historyLatest !== null &&
-    historyStart !== historyLatest &&
-    (Math.abs(historyStart.lat - historyLatest.lat) > BOOTSTRAP_EPSILON ||
-      Math.abs(historyStart.lng - historyLatest.lng) > BOOTSTRAP_EPSILON);
-  const selectedDevice =
-    visibleDevices.find((d) => d.deviceId === primarySelectedId) ?? null;
   const selectedVisibleDevices = useMemo(
     () => visibleDevices.filter((device) => selectedDeviceIdSet.has(device.deviceId)),
     [selectedDeviceIdSet, visibleDevices]
@@ -388,8 +392,13 @@ export function TrackerMap({
     () => visibleDevices.filter((device) => !selectedDeviceIdSet.has(device.deviceId)),
     [selectedDeviceIdSet, visibleDevices]
   );
-  const primaryColor =
-    (primarySelectedId ? deviceColorMap.get(primarySelectedId) : undefined) ?? "#2563eb";
+  const devicesWithHome = useMemo(
+    () =>
+      visibleDevices.filter(
+        (device) => device.homeSet && isValidPair(device.homeLat, device.homeLng),
+      ),
+    [visibleDevices],
+  );
 
   const center = useMemo<[number, number]>(() => {
     if (selectedVisibleDevices.length === 0) {
@@ -577,100 +586,121 @@ export function TrackerMap({
           );
         })}
 
-        {showHistory && visibleHistory.length > 1 && (
-          <>
-            <Polyline
-              positions={visibleHistory.map((p) => [p.lat, p.lng])}
-              pathOptions={{
-                color: theme === "light" ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.88)",
-                weight: 8,
-                opacity: 0.95,
-              }}
-            />
-            <Polyline
-              positions={visibleHistory.map((p) => [p.lat, p.lng])}
-              pathOptions={{ color: primaryColor, weight: 4.5, opacity: 0.92 }}
-            />
-          </>
-        )}
-
         {showHistory &&
-          intermediateHistory.map((point) => (
-            <CircleMarker
-              key={`${point.deviceId}-${point.timestamp}`}
-              center={[point.lat, point.lng]}
-              radius={6}
-              pathOptions={{
-                color: "#ffffff",
-                fillColor: primaryColor,
-                fillOpacity: 0.96,
-                weight: 2.5,
-              }}
-            >
-              <Tooltip className="history-point-tooltip" direction="top" offset={[0, -8]}>
-                <div className="history-point-tooltip__body">
-                  <strong>{formatTimestamp(point.timestamp, locale)}</strong>
-                  <div>{point.lat.toFixed(6)}, {point.lng.toFixed(6)}</div>
-                </div>
-              </Tooltip>
-            </CircleMarker>
-          ))}
+          selectedHistoryGroups.map((group) => {
+            const historyStart = group.points[0] ?? null;
+            const historyLatest = group.points[group.points.length - 1] ?? null;
+            const intermediateHistory =
+              group.points.length > 2 ? group.points.slice(1, -1) : [];
+            const shouldShowHistoryStart =
+              historyStart !== null &&
+              historyLatest !== null &&
+              historyStart !== historyLatest &&
+              (Math.abs(historyStart.lat - historyLatest.lat) > BOOTSTRAP_EPSILON ||
+                Math.abs(historyStart.lng - historyLatest.lng) > BOOTSTRAP_EPSILON);
+            const tooltipPermanent = selectedHistoryGroups.length === 1;
 
-        {showHistory && shouldShowHistoryStart && historyStart && (
-          <CircleMarker
-            center={[historyStart.lat, historyStart.lng]}
-            radius={9}
-            pathOptions={{
-              color: "#ffffff",
-              fillColor: "#16a34a",
-              fillOpacity: 1,
-              weight: 3,
-            }}
-          >
-            <Tooltip
-              className="history-point-tooltip history-point-tooltip--key"
-              direction="top"
-              offset={[0, -10]}
-              permanent
-            >
-              <div className="history-point-tooltip__body">
-                <span className="history-point-tooltip__tag">
-                  {historyStartLabel}
-                </span>
-                <strong>{formatTimestamp(historyStart.timestamp, locale)}</strong>
-                <div>{formatHistoryPointTooltip(historyStart)}</div>
-              </div>
-            </Tooltip>
-          </CircleMarker>
-        )}
+            return (
+              <Fragment key={`history-group-${group.deviceId}`}>
+                {group.points.length > 1 ? (
+                  <>
+                    <Polyline
+                      positions={group.points.map((point) => [point.lat, point.lng])}
+                      pathOptions={{
+                        color: theme === "light" ? "rgba(255,255,255,0.92)" : "rgba(15,23,42,0.88)",
+                        weight: 8,
+                        opacity: 0.95,
+                      }}
+                    />
+                    <Polyline
+                      positions={group.points.map((point) => [point.lat, point.lng])}
+                      pathOptions={{ color: group.color, weight: 4.5, opacity: 0.92 }}
+                    />
+                  </>
+                ) : null}
 
-        {showHistory && historyLatest && (
-          <CircleMarker
-            center={[historyLatest.lat, historyLatest.lng]}
-            radius={10}
-            pathOptions={{
-              color: "#ffffff",
-              fillColor: "#ef4444",
-              fillOpacity: 1,
-              weight: 3,
-            }}
-          >
-            <Tooltip
-              className="history-point-tooltip history-point-tooltip--key"
-              direction="top"
-              offset={[0, -10]}
-              permanent
-            >
-              <div className="history-point-tooltip__body">
-                <span className="history-point-tooltip__tag">
-                  {historyLatestLabel}
-                </span>
-                <strong>{formatTimestamp(historyLatest.timestamp, locale)}</strong>
-                <div>{formatHistoryPointTooltip(historyLatest)}</div>
-              </div>
-            </Tooltip>
-          </CircleMarker>
-        )}
+                {intermediateHistory.map((point) => (
+                  <CircleMarker
+                    key={`${point.deviceId}-${point.timestamp}`}
+                    center={[point.lat, point.lng]}
+                    radius={6}
+                    pathOptions={{
+                      color: "#ffffff",
+                      fillColor: group.color,
+                      fillOpacity: 0.96,
+                      weight: 2.5,
+                    }}
+                  >
+                    <Tooltip className="history-point-tooltip" direction="top" offset={[0, -8]}>
+                      <div className="history-point-tooltip__body">
+                        <strong>{group.deviceName}</strong>
+                        <div>{formatTimestamp(point.timestamp, locale)}</div>
+                        <div>{formatHistoryPointTooltip(point)}</div>
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                ))}
+
+                {shouldShowHistoryStart && historyStart ? (
+                  <CircleMarker
+                    center={[historyStart.lat, historyStart.lng]}
+                    radius={9}
+                    pathOptions={{
+                      color: "#ffffff",
+                      fillColor: group.color,
+                      fillOpacity: 0.92,
+                      weight: 3,
+                    }}
+                  >
+                    <Tooltip
+                      className="history-point-tooltip history-point-tooltip--key"
+                      direction="top"
+                      offset={[0, -10]}
+                      permanent={tooltipPermanent}
+                    >
+                      <div className="history-point-tooltip__body">
+                        <span className="history-point-tooltip__tag">
+                          {historyStartLabel}
+                        </span>
+                        <strong>{group.deviceName}</strong>
+                        <div>{formatTimestamp(historyStart.timestamp, locale)}</div>
+                        <div>{formatHistoryPointTooltip(historyStart)}</div>
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                ) : null}
+
+                {historyLatest ? (
+                  <CircleMarker
+                    center={[historyLatest.lat, historyLatest.lng]}
+                    radius={10}
+                    pathOptions={{
+                      color: "#ffffff",
+                      fillColor: group.color,
+                      fillOpacity: 1,
+                      weight: 3,
+                    }}
+                  >
+                    <Tooltip
+                      className="history-point-tooltip history-point-tooltip--key"
+                      direction="top"
+                      offset={[0, -10]}
+                      permanent={tooltipPermanent}
+                    >
+                      <div className="history-point-tooltip__body">
+                        <span className="history-point-tooltip__tag">
+                          {historyLatestLabel}
+                        </span>
+                        <strong>{group.deviceName}</strong>
+                        <div>{formatTimestamp(historyLatest.timestamp, locale)}</div>
+                        <div>{formatHistoryPointTooltip(historyLatest)}</div>
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                ) : null}
+              </Fragment>
+            );
+          })}
 
         {roadRoutes.map((route) => (
           <Polyline
@@ -693,64 +723,46 @@ export function TrackerMap({
           </Polyline>
         ))}
 
-        {selectedDevice?.homeSet && isValidPair(selectedDevice.homeLat, selectedDevice.homeLng) && (
-          <>
-            <CircleMarker
-              center={[selectedDevice.homeLat!, selectedDevice.homeLng!]}
-              radius={9}
-              pathOptions={{
-                color: primaryColor,
-                fillColor: primaryColor,
-                fillOpacity: 0.9,
-                weight: 2,
-              }}
-            >
-              <Tooltip direction="top">{homeLabel}</Tooltip>
-            </CircleMarker>
+        {devicesWithHome.map((device) => {
+          const isSelected = selectedDeviceIdSet.has(device.deviceId);
+          const color = deviceColorMap.get(device.deviceId) ?? "#64748b";
 
-            {selectedDevice.geoEnabled && (selectedDevice.geoRadiusM ?? 0) > 0 && (
-              <Circle
-                center={[selectedDevice.homeLat!, selectedDevice.homeLng!]}
-                radius={selectedDevice.geoRadiusM!}
-                pathOptions={{
-                  color: primaryColor,
-                  opacity: 0.6,
-                  fillColor: primaryColor,
-                  fillOpacity: 0.08,
-                  dashArray: "6 4",
-                }}
-              />
-            )}
-          </>
-        )}
-
-        {visibleDevices
-          .filter(
-            (d) =>
-              d.deviceId !== primarySelectedId &&
-              d.homeSet &&
-              isValidPair(d.homeLat, d.homeLng)
-          )
-          .map((d) => {
-            const isSelected = selectedDeviceIdSet.has(d.deviceId);
-            const color = deviceColorMap.get(d.deviceId) ?? "#64748b";
-
-            return (
+          return (
+            <Fragment key={`home-${device.deviceId}`}>
               <CircleMarker
-                key={`home-${d.deviceId}`}
-                center={[d.homeLat!, d.homeLng!]}
-                radius={isSelected ? 6 : 5}
+                center={[device.homeLat!, device.homeLng!]}
+                radius={isSelected ? 8 : 5}
                 pathOptions={{
-                  color: isSelected ? color : "#64748b",
-                  fillColor: isSelected ? color : "#64748b",
-                  fillOpacity: isSelected ? 0.72 : 0.5,
-                  weight: isSelected ? 1.5 : 1,
+                  color,
+                  fillColor: color,
+                  fillOpacity: isSelected ? 0.84 : 0.5,
+                  weight: isSelected ? 2 : 1,
                 }}
               >
-                <Tooltip direction="top">{d.deviceName || d.deviceId}</Tooltip>
+                <Tooltip direction="top">
+                  <div>
+                    <strong>{device.deviceName || device.deviceId}</strong>
+                    <div>{homeLabel}</div>
+                  </div>
+                </Tooltip>
               </CircleMarker>
-            );
-          })}
+
+              {isSelected && device.geoEnabled && (device.geoRadiusM ?? 0) > 0 ? (
+                <Circle
+                  center={[device.homeLat!, device.homeLng!]}
+                  radius={device.geoRadiusM!}
+                  pathOptions={{
+                    color,
+                    opacity: 0.6,
+                    fillColor: color,
+                    fillOpacity: 0.08,
+                    dashArray: "6 4",
+                  }}
+                />
+              ) : null}
+            </Fragment>
+          );
+        })}
 
         {draftHome && (
           <Marker position={[draftHome.lat, draftHome.lng]} icon={draftIcon} zIndexOffset={1000}>
@@ -765,6 +777,20 @@ export function TrackerMap({
           </Marker>
         )}
       </MapContainer>
+
+      {showHistory && selectedHistoryGroups.length > 1 ? (
+        <div className="gmaps-history-legend">
+          <strong className="gmaps-history-legend__title">{historyLegendLabel}</strong>
+          <div className="gmaps-history-legend__list">
+            {selectedHistoryGroups.map((group) => (
+              <div className="gmaps-history-legend__item" key={`legend-${group.deviceId}`}>
+                <span className="gmaps-history-legend__swatch" style={{ background: group.color }} />
+                <span>{group.deviceName}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
