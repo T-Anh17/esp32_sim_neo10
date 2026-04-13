@@ -171,9 +171,9 @@ void loadDataFromRom() {
   nvsReadStr("NLOC_PRV", cfg.netlocProvider, sizeof(cfg.netlocProvider),
              "unwiredlabs");
   nvsReadStr("NLOC_URL", cfg.netlocRelayUrl, sizeof(cfg.netlocRelayUrl),
-             "https://gps-tracker.ahcntab.workers.dev/api/geolocate");
+             "http://gps-tracker.ahcntab.workers.dev/api/geolocate");
   nvsReadStr("SNLOC_URL", cfg.simNetlocRelayUrl, sizeof(cfg.simNetlocRelayUrl),
-             "");
+             "http://gps-tracker.ahcntab.workers.dev/api/geolocate");
 
   applyConfigSnapshot(&cfg);
 

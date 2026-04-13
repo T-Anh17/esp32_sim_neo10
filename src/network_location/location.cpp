@@ -494,7 +494,7 @@ static bool doHybridGeolocationViaSIMApi() {
   String googleWiFiJson;
   String unwiredWiFiJson;
   int wifiCount =
-      ensureWiFiFingerprint(&googleWiFiJson, &unwiredWiFiJson, false);
+      ensureWiFiFingerprint(&googleWiFiJson, &unwiredWiFiJson, true);
 
   int csq = sim_readCSQ();
   int dbm = (csq >= 0 && csq <= 31) ? (-113 + 2 * csq) : -113;
@@ -725,28 +725,23 @@ static bool doCellGeolocationCLBS() {
 //   6) Refresh every 30 min while GPS is still down
 // ============================================================
 bool acquireNetworkLocationNow() {
-  TelemetrySnapshot telem = {};
-  getTelemetrySnapshot(&telem);
-  // if (telem.sosActive)
-  //   return false;
-
-  // 1. Thử WiFi Geolocation trước (độ chính xác cao nhất ~20-50m)
-  if (WiFi.status() == WL_CONNECTED) {
-    if (doWiFiGeolocation())
-      return true;
+  // 1. Thử Hybrid Geolocation (WiFi + Cell ID) gửi qua 4G
+  // Đảm bảo hàm này được chạy đầu tiên để lấy độ chính xác cao nhất (~20-50m)
+  if (doHybridGeolocationViaSIMApi()) {
+    return true;
   }
 
-  // 2. Thử Hybrid qua API (Cell + WiFi BSSID)
-  if (doCellGeolocationCLBS())
+  // 2. Dự phòng: Chỉ dùng Cell ID (LBS) thuần túy của module qua lệnh AT+CLBS
+  // Sai số sẽ cao (~500m-2km), chỉ dùng khi API Unwired Labs không gọi được
+  if (doCellGeolocationCLBS()) {
     return true;
+  }
 
-  // 3. KÍCH HOẠT LẠI: Dùng trực tiếp trạm phát sóng (LBS) của nhà mạng qua
-  // AT+CLBS Đây là cách bạn muốn (vị trí tương đối khi ko có internet/GPS)
-  if (doHybridGeolocationViaSIMApi())
+  // 3. Dự phòng 2: Chỉ dùng trạm phát qua API (trong trường hợp module ko có
+  // CLBS)
+  if (doCellGeolocationViaSIMApi()) {
     return true;
-
-  if (doCellGeolocationViaSIMApi())
-    return true;
+  }
 
   logLine("[NETLOC] Tất cả các phương thức lấy vị trí mạng đều thất bại");
   return false;

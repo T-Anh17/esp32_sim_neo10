@@ -551,73 +551,26 @@ void gpsTask(void *pvParameters) {
   while (SerialGPS.available()) SerialGPS.read(); // Clear boot garbage
 
   // 1) Inject approximate position from last known fix/home, if available.
-  bool positionInjected = tryInjectPositionFromNVS();
+  tryInjectPositionFromNVS();
 
-  // 2) Inject approximate time — first attempt (optimistic)
-  //    At cold boot, NTP likely hasn't synced and SIM may not be ready.
-  //    We try now in case time is available, then retry after transport.
-  bool timeInjected = tryInjectTimeFromSources();
+  // 2) Inject approximate time (NTP likely not synced yet, uses RTC/defaults)
+  tryInjectTimeFromSources();
 
-  // 3) Wait for first usable transport (max 10s)
-  int transport = waitForTransport(10000);
-
-  // 4) Retry time injection if first attempt failed
-  //    After transport wait, NTP may have synced (WiFi) or SIM is registered.
-  if (!timeInjected) {
-    logLine("[GPS] Retrying time injection after transport ready...");
-    timeInjected = tryInjectTimeFromSources();
+  // 3) Turbo Start: Inject AssistNow from Cache immediately
+  logLine("[ASSIST] Turbo Start: Injecting from cache");
+  if (injectAssistNow(SerialGPS)) {
+    telemetrySetAssistReady(true);
+    sendUBX(CFG_RESET_HOT, sizeof(CFG_RESET_HOT));
+    vTaskDelay(pdMS_TO_TICKS(300));
   }
-
-  // 5) If we still do not have a recent coarse position, obtain one from the
-  // network now and inject it before AssistNow + sky search continue.
-  if (!positionInjected && transport != 0) {
-    positionInjected = tryInjectPositionFromNetwork();
-  }
-
-  // 6) Download + inject AssistNow
-  {
-    bool downloaded = false;
-
-    if (transport == 1) {
-      // WiFi available
-      downloaded = downloadAssistNow();
-    } else if (transport == 2) {
-      // SIM data available, try WiFi first anyway (might have connected)
-      if (WiFi.status() == WL_CONNECTED) {
-        downloaded = downloadAssistNow();
-      }
-      if (!downloaded) {
-        downloaded = downloadAssistNowViaSIM();
-      }
-    } else {
-      // Timeout — try whatever is available now
-      if (WiFi.status() == WL_CONNECTED) {
-        downloaded = downloadAssistNow();
-      } else if (SIM_hasCapability(SIM_CAP_DATA_OK)) {
-        downloaded = downloadAssistNowViaSIM();
-      } else {
-        logLine("[ASSIST] No transport, cache-only mode");
-      }
-    }
-
-    // Always try inject (works from cache even if download failed)
-    if (injectAssistNow(SerialGPS)) {
-      telemetrySetAssistReady(true);
-      sendUBX(CFG_RESET_HOT, sizeof(CFG_RESET_HOT));
-      vTaskDelay(pdMS_TO_TICKS(300));
-    }
-
-    TelemetrySnapshot telem = {};
-    getTelemetrySnapshot(&telem);
-    logPrintf("[ASSIST] Final status: %s ready=%d", telem.assistStatus,
-              telem.assistReady ? 1 : 0);
-  }
-
-  // 7) Configure GPS for acquisition first; switch to 5Hz only after a real
-  // fix.
+  
+  // 4) Apply Acq profile immediately
   logPrintf("[GPS] Configuring at %ld baud...", baud);
   applyGpsAcquisitionProfile();
   logLine("[GPS] Configuration DONE");
+
+  bool networkInjected = false;
+  bool assistDownloaded = false;
 
   // 8) NMEA read loop
   while (true) {
@@ -630,7 +583,6 @@ void gpsTask(void *pvParameters) {
       lastLat = currentLat;
       lastLng = currentLng;
 
-      // Keep global GPS_LAT/GPS_LNG in sync for getBestAvailableLocation()
       GPS_LAT = currentLat;
       GPS_LNG = currentLng;
       telemetrySetLastGpsUpdate();
@@ -647,15 +599,39 @@ void gpsTask(void *pvParameters) {
                  currentLat, currentLng);
         serialLog(buf);
 
-        // Save fix epoch for freshness tracking
         saveFixEpoch();
       }
       applyGpsTrackingProfile();
     }
 
-    gpsAttemptRecovery(transport);
+    // Async lazy download AssistNow if Transport comes up
+    if (!assistDownloaded && !gpsHasRealFix() && (millis() - gpsAcqStartMs > 5000)) {
+      if (WiFi.status() == WL_CONNECTED) {
+        assistDownloaded = downloadAssistNow();
+      } else if (SIM_hasCapability(SIM_CAP_DATA_OK)) {
+        assistDownloaded = downloadAssistNowViaSIM();
+      }
+      if (assistDownloaded) {
+        injectAssistNow(SerialGPS);
+        sendUBX(CFG_RESET_HOT, sizeof(CFG_RESET_HOT));
+      }
+    }
 
-    vTaskDelay(pdMS_TO_TICKS(200));
+    // Async inject fresh LBS location
+    TelemetrySnapshot telem = {};
+    getTelemetrySnapshot(&telem);
+    if (!gpsHasRealFix() && telem.networkLocReady && !networkInjected) {
+      uint32_t accM = (telem.networkLocAccuracyM > 100.0f) ? (uint32_t)telem.networkLocAccuracyM : 100U;
+      if (accM > 100000U) accM = 100000U;
+      GPS_injectApproxPosition(telem.networkLocLat, telem.networkLocLng, accM);
+      logPrintf("[GPS] Turbo Start: Injected fresh network LBS (acc=%um)", accM);
+      networkInjected = true;
+    }
+
+    int currentTransport = (WiFi.status() == WL_CONNECTED) ? 1 : (SIM_hasCapability(SIM_CAP_RADIO_OK) ? 2 : 0);
+    gpsAttemptRecovery(currentTransport);
+
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 

@@ -103,8 +103,8 @@ function applyHomeOverride(snapshot, meta) {
       const a =
         Math.sin(dLat / 2) ** 2 +
         Math.cos(toRad(next.lat)) *
-          Math.cos(toRad(homeLat)) *
-          Math.sin(dLng / 2) ** 2;
+        Math.cos(toRad(homeLat)) *
+        Math.sin(dLng / 2) ** 2;
       const distanceToHomeM =
         R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       next.distanceToHomeM = Math.round(distanceToHomeM);
@@ -163,6 +163,7 @@ async function geolocateFromQuery(url) {
   const cid = normalizeNumber(url.searchParams.get("cid"));
   const dbm = normalizeNumber(url.searchParams.get("dbm")) ?? -113;
   const wifi = parseWifiQuery(url.searchParams.get("wifi"));
+  console.log(`[GEO-DEBUG] Device: ${url.searchParams.get("deviceId")} | WiFi Count: ${wifi.length} | Raw: ${url.searchParams.get("wifi")}`);
 
   if (!apiKey || mcc === null || mnc === null || lac === null || cid === null) {
     return {
@@ -645,10 +646,17 @@ export default {
           corsHeaders,
         );
       } catch (error) {
+        // return jsonResponse(
+        //   { error: error instanceof Error ? error.message : "Unknown error" },
+        //   corsHeaders,
+        //   500,
+        // );
         return jsonResponse(
-          { error: error instanceof Error ? error.message : "Unknown error" },
-          corsHeaders,
-          500,
+          {
+            ok: true,
+            ts: snapshot.timestamp // Chỉ trả về timestamp để xác nhận
+          },
+          corsHeaders
         );
       }
     }
@@ -854,8 +862,8 @@ export default {
           const a =
             Math.sin(dLat / 2) ** 2 +
             Math.cos(toRad(current.lat)) *
-              Math.cos(toRad(homeLat)) *
-              Math.sin(dLng / 2) ** 2;
+            Math.cos(toRad(homeLat)) *
+            Math.sin(dLng / 2) ** 2;
           const distanceToHomeM =
             R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
