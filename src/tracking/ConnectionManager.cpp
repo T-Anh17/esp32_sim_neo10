@@ -47,16 +47,11 @@ bool ConnectionManager::sendViaSIM(const String &payload,
     return false;
   if (telemetryIsSosActive())
     return false;
-  const String simUrl =
-      strlen(cfg.simTrackingUrl) >= 8 ? String(cfg.simTrackingUrl)
-                                      : String(DEFAULT_TRACKING_URL);
+  const String simUrl = strlen(cfg.simTrackingUrl) >= 8
+                            ? String(cfg.simTrackingUrl)
+                            : String(DEFAULT_TRACKING_URL);
   if (strlen(cfg.simTrackingUrl) < 8) {
     logLine("[TRACK] SIM tracking URL missing, using default update endpoint");
-  }
-  if (SIM7680C_isTlsHostBlocked(simUrl)) {
-    logPrintf("[TRACK] SIM TLS blocked for host=%s", simUrl.c_str());
-    telemetrySetTrackSimCode(715);
-    return false;
   }
 
   logLine("[TRACK] SIM POST...");
@@ -90,10 +85,6 @@ bool ConnectionManager::sendTrackingPayload(const String &payload,
     return false;
 
   logPrintf("[TRACK] SIM GET fallback urlLen=%d", fallbackGetUrl.length());
-  if (SIM7680C_isTlsHostBlocked(fallbackGetUrl)) {
-    logLine("[TRACK] clearing TLS blocklist before GET fallback retry");
-    SIM7680C_clearTlsHostBlocklist();
-  }
   String response;
   if (!SIM7680C_httpGetWithResponse(fallbackGetUrl, response)) {
     if (response.length() > 0)
