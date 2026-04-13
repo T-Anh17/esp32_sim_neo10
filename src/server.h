@@ -12,6 +12,7 @@
 #define SMS_TEXT "I need support. Please visit at: "
 #define GPS_LOCAL_LAT "10.901146"
 #define GPS_LOCAL_LNG "106.806184"
+#define HOT_SERVER "https://t-anh17.github.io/esp32_sim_neo10/"
 
 #define DEBUG_ESP_PORT Serial
 

@@ -15,8 +15,8 @@ static void sosTask(void *pvParameters) {
   logLine("[SOS] === EMERGENCY TRIGGERED ===");
 
   String link = getGPSLink();
-  String msg = String(cfg.smsTemplate) + " - Link: " + link +
-               "\nWeb: https://t-anh17.github.io/esp32_sim_neo10/";
+  String msg =
+      String(cfg.smsTemplate) + " - Link: " + link + "\nWeb: " + HOT_SERVER;
 
   const char *nums[] = {cfg.call1, cfg.call2, cfg.call3, cfg.hotline};
   for (int i = 0; i < 4; i++) {

@@ -543,7 +543,7 @@ void SIM7680C_sendSMS(const String &mapLink) {
   getConfigSnapshot(&cfg);
 
   String msg = String(cfg.smsTemplate) + " - Link: " + mapLink;
-  msg += "\nWeb: https://t-anh17.github.io/esp32_sim_neo10/";
+  msg += "\nWeb: " HOT_SERVER;
   SIM7680C_sendSMS_to(cfg.call1, msg);
 }
 

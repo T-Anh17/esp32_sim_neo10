@@ -1,5 +1,6 @@
 #pragma once
 #include "Config.h"
+#include "server.h"
 #include <Arduino.h>
 #include <HardwareSerial.h>
 
@@ -54,8 +55,8 @@ void SIM7680C_clearTlsHostBlocklist();
 // --- Time ---
 // Read network time from SIM module (AT+CCLK?)
 // Returns true if valid time was parsed. Output is UTC.
-bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour,
-                        int *minute, int *second);
+bool SIM_getNetworkTime(int *year, int *month, int *day, int *hour, int *minute,
+                        int *second);
 
 // --- Cell info ---
 bool SIM_getCellInfo(int *mcc, int *mnc, int *lac, int *cellId, String *radio);
