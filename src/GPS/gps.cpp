@@ -704,9 +704,15 @@ String getGPSLink() {
              finalLat, finalLng);
   } else {
     logLine("[SOS] CẢNH BÁO: Không có vị trí nào, dùng vị trí mặc định");
-    snprintf(buffer, sizeof(buffer),
-             "https://maps.google.com/?q=%.6f,%.6f (Vi tri cu)", GPS_LOCAL_LAT,
-             GPS_LOCAL_LNG);
+    const double fallbackLat = atof(GPS_LOCAL_LAT);
+    const double fallbackLng = atof(GPS_LOCAL_LNG);
+    if (isfinite(fallbackLat) && isfinite(fallbackLng) &&
+        (fallbackLat != 0.0 || fallbackLng != 0.0)) {
+      snprintf(buffer, sizeof(buffer), "https://maps.google.com/?q=%.6f,%.6f",
+               fallbackLat, fallbackLng);
+    } else {
+      snprintf(buffer, sizeof(buffer), "Vi tri tam thoi khong xac dinh");
+    }
   }
 
   return String(buffer);
