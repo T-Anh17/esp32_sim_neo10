@@ -4,7 +4,7 @@
 #include <ESPmDNS.h>
 #include <time.h>
 
-static constexpr const char *AP_SSID = "TV_DEVICE";
+static constexpr const char *AP_SSID = "TV_DEVICE_01";
 static constexpr const char *AP_PASS = "123456788";
 static constexpr const char *STA_HOSTNAME = "neo10";
 static const IPAddress AP_IP(192, 168, 4, 1);
@@ -15,11 +15,8 @@ static bool staCredentialsConfigured() { return strlen(SSID_Name) > 0; }
 
 static bool shouldStartSta() { return staCredentialsConfigured(); }
 
-static bool shouldStartAp() {
-  if (!staCredentialsConfigured())
-    return true;
-  return WIFI_AP_ENABLE;
-}
+// AP must always be available at boot for portal provisioning.
+static bool shouldStartAp() { return true; }
 
 static void stopSta(bool powerOffRadio) {
   WiFi.setAutoReconnect(false);
@@ -113,32 +110,16 @@ void initWiFi() {
     stopSta(false);
     WiFi.setAutoReconnect(true);
     startStaConnect();
-  } else if (shouldStartSta()) {
-    Serial.println("[WIFI] Mode=STA only (AP host disabled by config)");
-    WiFi.mode(WIFI_MODE_STA);
-    stopSta(false);
-    WiFi.setAutoReconnect(true);
-    startStaConnect();
   } else {
     WiFi.mode(WIFI_MODE_AP);
     configureSoftAp();
     Serial.println("[WIFI] Mode=AP only (no STA credentials)");
   }
 
-  unsigned long t0 = millis();
-  while (shouldStartSta() && WiFi.status() != WL_CONNECTED &&
-         millis() - t0 < 8000) {
-    delay(400);
-    Serial.print(".");
-  }
-
-  if (shouldStartSta() && WiFi.status() == WL_CONNECTED)
-    Serial.printf("\n[WIFI] STA OK  IP=%s\n",
-                  WiFi.localIP().toString().c_str());
-  else if (shouldStartSta())
-    Serial.println("\n[WIFI] STA failed");
+  if (shouldStartSta())
+    Serial.println("[WIFI] STA connect started (non-blocking)");
   else
-    Serial.println("\n[WIFI] AP-only mode active");
+    Serial.println("[WIFI] AP-only mode active");
 
   startMdnsIfReady();
 }
@@ -161,16 +142,6 @@ void wifiRestoreApStaMode() {
     WiFi.mode(WIFI_MODE_APSTA);
     WiFi.setSleep(WIFI_PS_MIN_MODEM);
     configureSoftAp();
-    stopSta(false);
-    WiFi.setAutoReconnect(true);
-    startStaConnect();
-    return;
-  }
-
-  if (shouldStartSta()) {
-    Serial.println("[WIFI] Reconfiguring WiFi: STA only (AP host disabled)");
-    WiFi.mode(WIFI_MODE_STA);
-    WiFi.setSleep(WIFI_PS_MIN_MODEM);
     stopSta(false);
     WiFi.setAutoReconnect(true);
     startStaConnect();

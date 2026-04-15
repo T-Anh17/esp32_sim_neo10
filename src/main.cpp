@@ -92,7 +92,7 @@ void setup() {
   // 2) Hardware
   buzzer_init();
 
-  // 3) WiFi
+  // 3) WiFi (AP starts immediately, STA continues in background)
   initWiFi();
 
   // 4) Portal
