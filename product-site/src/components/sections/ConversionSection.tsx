@@ -2,7 +2,7 @@ import type { FC } from "react";
 import { Check, ShoppingBag, Shield, Tag } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import { trackCTA } from "@/services/analytics/webAnalytics";
-import imgMain from "@/assets/img_main.png";
+import imgMain from "@/assets/img_main.webp";
 
 interface ConversionSectionProps {
   onOrderClick?: () => void;

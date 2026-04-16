@@ -1,7 +1,7 @@
 import type { FC } from "react";
 import { cn } from "@/lib/utils";
 import type { BrandLogoProps } from "@/types";
-import logo from "@/assets/logo.png";
+import logo from "@/assets/logo.webp";
 
 const BrandLogo: FC<BrandLogoProps> = ({ className, compact = false, showSubtitle = true }) => {
   return (

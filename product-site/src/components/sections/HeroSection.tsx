@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { ArrowRight, BellRing, MapPinned, PhoneCall, ShieldCheck } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import { trackCTA } from "@/services/analytics/webAnalytics";
-import productMain from "@/assets/img_main.png";
+import productMain from "@/assets/img_main.webp";
 import productImg2 from "@/assets/img2.jpg";
 import productImg3 from "@/assets/img3.jpg";
 import productImg5 from "@/assets/img5.jpg";
