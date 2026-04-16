@@ -12,6 +12,22 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/i18n/context";
 import fullProcess from "@/assets/full_process.jpg";
+import step01 from "@/assets/step1.jpg";
+import step02 from "@/assets/step2.jpg";
+import step03 from "@/assets/step3.jpg";
+import step04 from "@/assets/step4.jpg";
+
+interface ProcessImage {
+  src: string;
+  alt: string;
+}
+
+const processImages: ProcessImage[] = [
+  { src: step01, alt: "Bước 1: Chuẩn bị linh kiện & phần cứng" },
+  { src: step02, alt: "Bước 2: Chế tạo điện mạch trên Perboard" },
+  { src: step03, alt: "Bước 3: Chế tạo Vỏ & Tích hợp" },
+  { src: step04, alt: "Bước 4: Lắp ráp & kiểm tra" },
+];
 
 const uspIcons: LucideIcon[] = [Webhook, ShieldAlert, MapPinCheck, Waves];
 const featureIcons: LucideIcon[] = [Siren, Smartphone, Radio, CheckCircle2];
@@ -36,9 +52,11 @@ const OverviewSection: FC = () => {
         </div>
       </div>
 
-      {/* USPs - Gray section */}
+      {/* Điểm khác biệt + Cách hoạt động - gộp chung */}
       <div className="bg-[#f5f5f7] py-16 sm:py-20">
         <div className="container">
+
+          {/* USPs */}
           <h3 className="mb-8 text-center text-xl font-semibold text-[#1d1d1f] sm:text-2xl">
             {t.overview.uspHeading}
           </h3>
@@ -58,42 +76,36 @@ const OverviewSection: FC = () => {
               );
             })}
           </div>
-        </div>
-      </div>
 
-      {/* How it works - White section */}
-      <div className="bg-white py-16 sm:py-20">
-        <div className="container">
-          <h3 className="mb-10 text-center text-xl font-semibold text-[#1d1d1f] sm:text-2xl">
+          {/* Divider */}
+          <div className="my-12 border-t border-[#d2d2d7]" />
+
+          {/* How it works */}
+          <h3 className="mb-8 text-center text-xl font-semibold text-[#1d1d1f] sm:text-2xl">
             {t.overview.howHeading}
           </h3>
-          <div className="mx-auto grid max-w-3xl gap-0">
+          <div className="grid gap-4 sm:grid-cols-3">
             {t.overview.steps.map((step, index) => {
               const Icon = featureIcons[index] ?? CheckCircle2;
               return (
-                <article
-                  key={step.title}
-                  className="relative flex items-start gap-5 py-6"
-                >
-                  {/* Connector line */}
-                  {index < t.overview.steps.length - 1 && (
-                    <span className="absolute left-[23px] top-[56px] h-[calc(100%-32px)] w-px bg-[#d2d2d7]" />
-                  )}
-                  <span className="relative z-10 inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#1d1d1f] text-white">
+                <div key={step.title} className="flex flex-col items-center gap-3 rounded-2xl bg-white p-6 text-center">
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#1d1d1f] text-white">
                     <Icon className="h-5 w-5" />
                   </span>
-                  <div className="pt-1">
-                    <h4 className="text-base font-semibold text-[#1d1d1f]">
-                      {step.title.replace(/^\d+\.\s*/, "")}
-                    </h4>
-                    <p className="mt-1.5 text-sm leading-relaxed text-[#86868b]">
-                      {step.desc}
-                    </p>
-                  </div>
-                </article>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-[#0071e3]">
+                    Bước {index + 1}
+                  </span>
+                  <h4 className="text-sm font-semibold text-[#1d1d1f]">
+                    {step.title.replace(/^\d+\.\s*/, "")}
+                  </h4>
+                  <p className="text-xs leading-relaxed text-[#86868b]">
+                    {step.desc}
+                  </p>
+                </div>
               );
             })}
           </div>
+
         </div>
       </div>
 
@@ -107,13 +119,32 @@ const OverviewSection: FC = () => {
             {t.overview.processDesc}
           </p>
           {/* Full process image - tổng hợp 4 quy trình */}
-          <div className="overflow-hidden rounded-2xl bg-white">
+          <div className="mb-6 overflow-hidden rounded-2xl bg-white">
             <img
               src={fullProcess}
               alt="Toàn bộ quy trình sản xuất BA.SEW"
               loading="lazy"
               className="w-full object-contain"
             />
+          </div>
+
+          {/* 4 step images - tỉ lệ 4:3 */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            {processImages.map((image) => (
+              <figure key={image.src} className="overflow-hidden rounded-2xl bg-white">
+                <div className="aspect-[4/3] overflow-hidden">
+                  <img
+                    src={image.src}
+                    alt={image.alt}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <figcaption className="px-3 py-2 text-xs font-medium leading-snug text-[#1d1d1f]">
+                  {image.alt}
+                </figcaption>
+              </figure>
+            ))}
           </div>
         </div>
       </div>

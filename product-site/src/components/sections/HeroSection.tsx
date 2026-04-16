@@ -28,9 +28,7 @@ const HeroSection: FC = () => {
     <section className="overflow-hidden bg-white pb-0 pt-14">
       {/* Hero text - centered Apple style */}
       <div className="container py-16 text-center sm:py-24">
-        <p className="text-sm font-medium tracking-wide text-[#0071e3] sm:text-base">
-          Thiết bị cảnh báo khẩn cấp thông minh
-        </p>
+
         <h1 className="mx-auto mt-3 max-w-3xl text-hero-xl text-[#1d1d1f]">
           <span className="block">BE.SEW</span>
           <span className="mt-1 block text-[clamp(1.3rem,3.2vw,1.8rem)] font-medium leading-snug text-[#86868b]">
