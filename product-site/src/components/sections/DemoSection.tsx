@@ -35,88 +35,83 @@ const DemoSection: FC = () => {
 
   return (
     <section id="demo" className="scroll-mt-12">
-      {/* Heading */}
-      <div className="bg-white py-20 text-center sm:py-28">
-        <div className="container">
-          <h2 className="text-section-title text-[#1d1d1f]">{t.demo.heading}</h2>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#86868b]">
-            {t.demo.desc}
-          </p>
-        </div>
-      </div>
-
-      {/* Video + Tracking cards */}
+      {/* Demo - 1 card trắng chung */}
       <div className="bg-[#f5f5f7] py-16 sm:py-20">
         <div className="container">
-          <div className="grid gap-5 lg:grid-cols-2">
-            {/* Video card */}
-            <article className="overflow-hidden rounded-3xl bg-white">
-              <div className="p-6 sm:p-8">
+          <article className="overflow-hidden rounded-3xl bg-white">
+            {/* Header */}
+            <div className="border-b border-[#f5f5f7] p-6 text-center sm:p-10">
+              <p className="text-sm font-medium tracking-wide text-[#0071e3]">Demo</p>
+              <h2 className="mt-3 text-section-title text-[#1d1d1f]">{t.demo.heading}</h2>
+              <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#86868b]">
+                {t.demo.desc}
+              </p>
+            </div>
+
+            {/* 2 cột: Video (trái) + Tracking (phải) */}
+            <div className="grid lg:grid-cols-2">
+              {/* Video - bên trái */}
+              <div className="border-b border-[#f5f5f7] p-6 sm:p-8 lg:border-b-0 lg:border-r">
                 <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-card-title text-[#1d1d1f]">{t.demo.videoTitle}</h3>
-                    <p className="mt-1.5 text-sm leading-relaxed text-[#86868b]">{t.demo.videoDesc}</p>
-                  </div>
+                  <h3 className="text-card-title text-[#1d1d1f]">{t.demo.videoTitle}</h3>
                   <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f5f5f7] text-[#1d1d1f]">
                     <Video className="h-5 w-5" />
                   </span>
                 </div>
-              </div>
 
-              <div className="bg-[#f5f5f7]">
-                <div className="aspect-video">
-                  {videoUrl && isVideoFile ? (
-                    <video
-                      src={videoUrl}
-                      className="h-full w-full bg-black object-contain"
-                      controls
-                      preload="metadata"
-                    />
-                  ) : videoUrl ? (
-                    <iframe
-                      title="BA.SEW guide video"
-                      src={videoUrl}
-                      className="h-full w-full border-0"
-                      loading="lazy"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <div className="relative flex h-full items-center justify-center overflow-hidden bg-gradient-to-br from-[#e8e8ed] to-[#f5f5f7] p-6 text-center">
-                      <div className="relative">
-                        <span className="mx-auto mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#1d1d1f] shadow-sm">
-                          <PlayCircle className="h-7 w-7" />
-                        </span>
-                        <h4 className="text-sm font-semibold text-[#1d1d1f]">{t.demo.videoPlaceholderTitle}</h4>
-                        <p className="mt-1 max-w-xs text-xs leading-relaxed text-[#86868b]">
-                          {t.demo.videoPlaceholderDesc}
-                        </p>
+                <div className="overflow-hidden rounded-2xl bg-[#f5f5f7]">
+                  <div className="aspect-video">
+                    {videoUrl && isVideoFile ? (
+                      <video
+                        src={videoUrl}
+                        className="h-full w-full bg-black object-contain"
+                        controls
+                        preload="metadata"
+                      />
+                    ) : videoUrl ? (
+                      <iframe
+                        title="BA.SEW guide video"
+                        src={videoUrl}
+                        className="h-full w-full border-0"
+                        loading="lazy"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <div className="relative flex h-full items-center justify-center overflow-hidden bg-gradient-to-br from-[#e8e8ed] to-[#f5f5f7] p-6 text-center">
+                        <div className="relative">
+                          <span className="mx-auto mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#1d1d1f] shadow-sm">
+                            <PlayCircle className="h-7 w-7" />
+                          </span>
+                          <h4 className="text-sm font-semibold text-[#1d1d1f]">{t.demo.videoPlaceholderTitle}</h4>
+                          <p className="mt-1 max-w-xs text-xs leading-relaxed text-[#86868b]">
+                            {t.demo.videoPlaceholderDesc}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
+
+                {videoUrl ? (
+                  <div className="mt-4">
+                    <a
+                      href={videoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => trackCTA("guide_video", "demo_section")}
+                      className="inline-flex items-center gap-1.5 text-sm font-normal text-[#0071e3] transition-colors hover:underline"
+                    >
+                      {t.demo.videoCta}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                ) : null}
               </div>
 
-              {videoUrl ? (
-                <div className="px-6 py-4 sm:px-8">
-                  <a
-                    href={videoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() => trackCTA("guide_video", "demo_section")}
-                    className="inline-flex items-center gap-1.5 text-sm font-normal text-[#0071e3] transition-colors hover:underline"
-                  >
-                    {t.demo.videoCta}
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              ) : null}
-            </article>
-
-            {/* Tracking card */}
-            <article className="overflow-hidden rounded-3xl bg-white">
+              {/* Tracking - bên phải */}
               <div className="p-6 sm:p-8">
-                <div className="flex items-start justify-between gap-3">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wider text-[#0071e3]">
                       BA.SEW Tracking
@@ -129,7 +124,7 @@ const DemoSection: FC = () => {
                   </span>
                 </div>
 
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {trackingHighlights.map((item, index) => {
                     const Icon = index % 2 === 0 ? MapPinned : Radar;
                     return (
@@ -160,8 +155,8 @@ const DemoSection: FC = () => {
                   </a>
                 </div>
               </div>
-            </article>
-          </div>
+            </div>
+          </article>
         </div>
       </div>
     </section>

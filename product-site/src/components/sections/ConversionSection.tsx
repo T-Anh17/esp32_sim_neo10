@@ -11,18 +11,50 @@ const ConversionSection: FC = () => {
 
   return (
     <section id="pricing-order" className="scroll-mt-12">
-      {/* Pricing hero - centered */}
-      <div className="bg-white py-20 text-center sm:py-28">
+      {/* Pricing hero - Apple style */}
+      <div className="bg-[#f5f5f7] py-16 text-center sm:py-20">
         <div className="container">
-          <h2 className="text-section-title text-[#1d1d1f]">{t.pricingOrder.heading}</h2>
+          <p className="text-sm font-medium tracking-wide text-[#0071e3]">
+            {t.pricingOrder.heading}
+          </p>
+          <h2 className="mx-auto mt-3 max-w-2xl text-section-title text-[#1d1d1f]">
+            Sở hữu BA.SEW ngay hôm nay
+          </h2>
           <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#86868b]">
             {t.pricingOrder.sub}
           </p>
-          <div className="mt-8">
-            <span className="text-[clamp(2.5rem,8vw,4rem)] font-bold leading-none tracking-tight text-[#1d1d1f]">
-              {t.pricingOrder.price}
-            </span>
-            <span className="ml-2 text-base font-normal text-[#86868b]">{t.pricingOrder.unit}</span>
+
+          {/* Price card */}
+          <div className="mx-auto mt-10 max-w-sm overflow-hidden rounded-3xl bg-white p-8 shadow-sm transition-shadow hover:shadow-lg">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#0071e3]">
+              Giá ưu đãi
+            </p>
+            <div className="mt-3 flex items-baseline justify-center gap-1">
+              <span className="text-[clamp(2.8rem,10vw,4.5rem)] font-bold leading-none tracking-tight text-[#1d1d1f]">
+                {t.pricingOrder.price}
+              </span>
+            </div>
+            <p className="mt-1 text-sm font-normal text-[#86868b]">{t.pricingOrder.unit}</p>
+
+            {/* Includes inline */}
+            <div className="mt-6 space-y-2.5 text-left">
+              {t.pricingOrder.includes.map((item) => (
+                <div key={item} className="flex items-center gap-2.5 text-sm text-[#1d1d1f]">
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0071e3]/10 text-[#0071e3]">
+                    <Check className="h-3 w-3" strokeWidth={3} />
+                  </span>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+
+            <a
+              href="#order"
+              onClick={() => trackCTA("pricing_order", "pricing_hero")}
+              className="mt-8 inline-flex h-12 w-full items-center justify-center rounded-full bg-[#0071e3] text-[15px] font-medium text-white transition-all hover:bg-[#0077ED]"
+            >
+              Đặt hàng ngay
+            </a>
           </div>
         </div>
       </div>

@@ -30,7 +30,7 @@ const HeroSection: FC = () => {
       <div className="container py-16 text-center sm:py-24">
 
         <h1 className="mx-auto mt-3 max-w-3xl text-hero-xl text-[#1d1d1f]">
-          <span className="block">BE.SEW</span>
+          <span className="block">BA.SEW</span>
           <span className="mt-1 block text-[clamp(1.3rem,3.2vw,1.8rem)] font-medium leading-snug text-[#86868b]">
             {t.hero.headline}
           </span>
