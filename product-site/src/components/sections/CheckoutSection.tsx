@@ -112,25 +112,22 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
       return;
     }
 
+    if (form.payment === "vietqr" || form.payment === "manual") {
+      // For QR/bank payments: just open payment modal, defer POST to confirmation
+      setShowQR(true);
+      return;
+    }
+
+    // COD: submit to Google Sheet immediately
     setStatus("sending");
     setErrorMessage("");
 
     try {
       const payload = buildPayload();
       const result = await submitOrder(payload);
-
-      // Store the orderId from backend
       setOrderId(result.orderId);
-
-      if (form.payment === "vietqr" || form.payment === "manual") {
-        // For bank/QR payments → open payment modal with orderId
-        setStatus("idle");
-        setShowQR(true);
-      } else {
-        // COD → show success immediately
-        setStatus("success");
-        clearCart();
-      }
+      setStatus("success");
+      clearCart();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Đặt hàng thất bại. Vui lòng thử lại.";
       setErrorMessage(msg);
@@ -165,10 +162,18 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
   };
 
   // ── Handle payment modal confirm (after user says "tôi đã chuyển khoản") ─
-  const handlePaymentConfirmed = () => {
+  const handlePaymentConfirmed = (returnedOrderId: string) => {
+    setOrderId(returnedOrderId);
     setShowQR(false);
     setStatus("success");
     clearCart();
+  };
+
+  // ── Called by modal to POST order to Google Sheet ─────────────────────────
+  const handleModalSubmitOrder = async (): Promise<{ orderId: string }> => {
+    const payload = buildPayload();
+    const result = await submitOrder(payload);
+    return { orderId: result.orderId };
   };
 
   // ── Reset & go back ───────────────────────────────────────────────────────
@@ -667,11 +672,9 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
         paymentMethod={form.payment}
         amount={grandTotal}
         phone={form.phone}
-        name={form.name}
-        address={fullAddress || detailAddress || "—"}
-        orderId={orderId}
         onClose={() => setShowQR(false)}
         onConfirm={handlePaymentConfirmed}
+        onSubmitOrder={handleModalSubmitOrder}
       />
     </div>
   );

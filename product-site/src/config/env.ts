@@ -29,6 +29,10 @@ export const PAYMENT_BANK_NAME: string =
   process.env.VITE_PAYMENT_BANK_NAME || "Vietcombank";
 export const PAYMENT_MOMO_PHONE: string =
   process.env.VITE_PAYMENT_MOMO_PHONE || "";
+export const PAYMENT_MOMO_QR_URL: string =
+  process.env.VITE_PAYMENT_MOMO_QR_URL || "";
+export const PAYMENT_BANK_LOGO_URL: string =
+  process.env.VITE_PAYMENT_BANK_LOGO_URL || "";
 
 /** Company / brand prefix used in VietQR addInfo field, e.g. "BASEW" */
 export const PAYMENT_COMPANY_PREFIX: string =
