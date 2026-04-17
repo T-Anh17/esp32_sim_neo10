@@ -1,4 +1,4 @@
-const isDev: boolean = process.env.NODE_ENV !== "production";
+ const isDev: boolean = process.env.NODE_ENV !== "production";
 
 /** Tracker GPS API base URL - set via VITE_TRACKER_API_BASE env var */
 export const TRACKER_API_BASE: string = (
@@ -17,6 +17,22 @@ export const TRACKING_WEB_URL: string =
   (isDev ? "http://localhost:3000/" : "https://thanhvu220809.github.io/esp32_sim_neo10/");
 export const LEAD_FORM_DEMO_MODE: boolean =
   process.env.VITE_LEAD_FORM_DEMO_MODE === "true";
+
+/** Payment — VietQR / Bank transfer */
+export const PAYMENT_BANK_BIN: string =
+  process.env.VITE_PAYMENT_BANK_BIN || "970436"; // Vietcombank default
+export const PAYMENT_ACCOUNT_NO: string =
+  process.env.VITE_PAYMENT_ACCOUNT_NO || "";
+export const PAYMENT_ACCOUNT_NAME: string =
+  process.env.VITE_PAYMENT_ACCOUNT_NAME || "NGUYEN VAN A";
+export const PAYMENT_BANK_NAME: string =
+  process.env.VITE_PAYMENT_BANK_NAME || "Vietcombank";
+export const PAYMENT_MOMO_PHONE: string =
+  process.env.VITE_PAYMENT_MOMO_PHONE || "";
+
+/** Company / brand prefix used in VietQR addInfo field, e.g. "BASEW" */
+export const PAYMENT_COMPANY_PREFIX: string =
+ process.env.VITE_PAYMENT_COMPANY_PREFIX || "BASEW";
 
 /** Analytics */
 export const GA_MEASUREMENT_ID: string = process.env.VITE_GA_MEASUREMENT_ID || "";

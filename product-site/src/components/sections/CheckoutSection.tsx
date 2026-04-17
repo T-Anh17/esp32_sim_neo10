@@ -1,6 +1,8 @@
-﻿import { useState, type FC, type FormEvent } from "react";
+import { useState, type FC, type FormEvent } from "react";
 import {
+  AlertCircle,
   ArrowLeft,
+  Banknote,
   Check,
   ChevronDown,
   CreditCard,
@@ -10,6 +12,7 @@ import {
   MapPinned,
   Minus,
   Plus,
+  QrCode,
   ShieldCheck,
   Trash2,
   Truck,
@@ -18,6 +21,13 @@ import {
 import { useCart } from "@/hooks/useCart";
 import { useAddressSelector } from "@/hooks/useAddressSelector";
 import BrandLogo from "@/components/BrandLogo";
+import PaymentQRModal, { type PaymentMethod } from "@/components/PaymentQRModal";
+import {
+  validateOrderForm,
+  mapPaymentMethod,
+  submitOrder,
+  type OrderPayload,
+} from "@/services/forms/orderService";
 
 type CheckoutStatus = "idle" | "sending" | "success" | "error";
 
@@ -33,12 +43,15 @@ interface CheckoutSectionProps {
 const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
   const { items, totalItems, totalPrice, removeItem, updateQuantity, clearCart } = useCart();
   const [status, setStatus] = useState<CheckoutStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [orderId, setOrderId] = useState("");
+  const [showQR, setShowQR] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
     email: "",
     note: "",
-    payment: "cod",
+    payment: "cod" as PaymentMethod,
   });
   const [detailAddress, setDetailAddress] = useState("");
   const {
@@ -62,25 +75,116 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
 
+  // ── Build location string from 3-level address selectors ──────────────────
+  const buildLocationString = (): string => {
+    const parts = [
+      selected.province?.name,
+      selected.district?.name,
+      selected.ward?.name,
+    ].filter(Boolean);
+    return parts.join(", ");
+  };
+
+  // ── Build the order payload ───────────────────────────────────────────────
+  const buildPayload = (): OrderPayload => ({
+    fullName: form.name.trim(),
+    phoneNumber: form.phone.replace(/[\s-]/g, ""),
+    email: form.email.trim(),
+    location: buildLocationString(),
+    addressDetail: detailAddress.trim(),
+    paymentMethod: mapPaymentMethod(form.payment),
+    totalAmount: formatPrice(grandTotal),
+    note: form.note.trim(),
+  });
+
+  // ── Call the backend API ──────────────────────────────────────────────────
+  const processOrder = async () => {
+    // Validate
+    const validationError = validateOrderForm({
+      fullName: form.name,
+      phoneNumber: form.phone,
+      email: form.email,
+      addressValid,
+    });
+    if (validationError) {
+      setErrorMessage(validationError);
+      setStatus("error");
+      return;
+    }
+
+    setStatus("sending");
+    setErrorMessage("");
+
+    try {
+      const payload = buildPayload();
+      const result = await submitOrder(payload);
+
+      // Store the orderId from backend
+      setOrderId(result.orderId);
+
+      if (form.payment === "vietqr" || form.payment === "manual") {
+        // For bank/QR payments → open payment modal with orderId
+        setStatus("idle");
+        setShowQR(true);
+      } else {
+        // COD → show success immediately
+        setStatus("success");
+        clearCart();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Đặt hàng thất bại. Vui lòng thử lại.";
+      setErrorMessage(msg);
+      setStatus("error");
+    }
+  };
+
+  // ── Handle form submit ────────────────────────────────────────────────────
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const hasContact = form.name.trim() && form.phone.trim();
-    if (!hasContact || !addressValid) {
+    setErrorMessage("");
+
+    // Quick client-side validation before API call
+    const validationError = validateOrderForm({
+      fullName: form.name,
+      phoneNumber: form.phone,
+      email: form.email,
+      addressValid,
+    });
+
+    if (validationError) {
+      setErrorMessage(validationError);
+      // Focus first invalid field
       if (!form.name.trim()) document.getElementById("field-name")?.focus();
       else if (!form.phone.trim()) document.getElementById("field-phone")?.focus();
       else if (!detailAddress.trim()) document.getElementById("field-detail-address")?.focus();
       return;
     }
-    setStatus("sending");
-    setTimeout(() => {
-      setStatus("success");
-      clearCart();
-    }, 1500);
+
+    // All methods go through processOrder (API call first)
+    processOrder();
   };
 
+  // ── Handle payment modal confirm (after user says "tôi đã chuyển khoản") ─
+  const handlePaymentConfirmed = () => {
+    setShowQR(false);
+    setStatus("success");
+    clearCart();
+  };
+
+  // ── Reset & go back ───────────────────────────────────────────────────────
   const handleBackToShop = () => {
     setStatus("idle");
+    setErrorMessage("");
+    setOrderId("");
     onClose();
+  };
+
+  // ── Reset form fields ─────────────────────────────────────────────────────
+  const resetForm = () => {
+    setForm({ name: "", phone: "", email: "", note: "", payment: "cod" });
+    setDetailAddress("");
+    setOrderId("");
+    setErrorMessage("");
   };
 
   if (!isOpen) return null;
@@ -112,12 +216,21 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
             </span>
             <h2 className="text-xl font-semibold text-[#1d1d1f]">Đặt hàng thành công!</h2>
             <p className="mt-2 text-sm leading-relaxed text-[#6e6e73]">
-              Cảm ơn bạn đã đặt mua BA.SEW. Chúng tôi sẽ liên hệ xác nhận đơn hàng trong thời gian sớm nhất.
+              {form.payment === "cod" ? (
+                <>
+                  Mã đơn của bạn là <strong className="text-[#1d1d1f]">{orderId}</strong>.{" "}
+                  TA SOLUTIONS sẽ liên hệ sớm để xác nhận.
+                </>
+              ) : (
+                <>
+                  Cảm ơn bạn đã đặt mua BA.SEW. Chúng tôi sẽ xác nhận thanh toán và giao hàng trong thời gian sớm nhất.
+                </>
+              )}
             </p>
             <p className="mt-4 rounded-xl bg-[#f5f5f7] p-4 text-xs text-[#6e6e73]">
-              Mã đơn hàng: <span className="font-bold text-[#1d1d1f]">BASEW-{Date.now().toString(36).toUpperCase()}</span>
+              Mã đơn hàng: <span className="font-bold text-[#1d1d1f]">{orderId || "N/A"}</span>
             </p>
-            <button type="button" onClick={handleBackToShop}
+            <button type="button" onClick={() => { resetForm(); handleBackToShop(); }}
               className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-[#8B5E3C] px-6 text-sm font-medium text-white hover:bg-[#6F4A2F]">
               Về trang chủ
             </button>
@@ -153,6 +266,20 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               </div>
             ))}
           </div>
+
+          {/* Error banner */}
+          {errorMessage && (
+            <div className="mb-6 mx-auto max-w-2xl flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 shadow-sm animate-[slideDown_0.25s_ease-out]">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-red-800">{errorMessage}</p>
+                <button type="button" onClick={() => setErrorMessage("")}
+                  className="mt-1 text-xs text-red-500 hover:text-red-700 underline">
+                  Đóng
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             {/* Left - Form */}
@@ -351,34 +478,86 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                   </span>
                   <h3 className="text-base font-semibold text-[#1d1d1f]">Phương thức thanh toán</h3>
                 </div>
+
                 <div className="space-y-3">
-                  {[
-                    { value: "cod", label: "Thanh toán khi nhận hàng (COD)", desc: "Trả tiền mặt khi nhận hàng", icon: Truck },
-                    { value: "bank", label: "Chuyển khoản ngân hàng", desc: "Chuyển khoản trước, giao hàng sau", icon: ShieldCheck },
-                  ].map(({ value, label, desc, icon: Icon }) => (
-                    <label key={value}
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${form.payment === value ? "border-[#8B5E3C] bg-[#8B5E3C]/5" : "border-[#d2d2d7] hover:bg-[#f5f5f7]"}`}>
-                      <input type="radio" name="payment" value={value}
-                        checked={form.payment === value} onChange={handleChange}
-                        className="mt-0.5 h-4 w-4 accent-[#8B5E3C]" />
-                      <Icon className="mt-0.5 h-5 w-5 shrink-0 text-[#6e6e73]" />
-                      <div>
-                        <span className="text-sm font-medium text-[#1d1d1f]">{label}</span>
-                        <p className="mt-0.5 text-xs text-[#6e6e73]">{desc}</p>
+                  {([
+                    {
+                      value: "vietqr" as PaymentMethod,
+                      label: "VietQR / MoMo",
+                      desc: "Quét mã QR bằng App Ngân hàng hoặc MoMo — tự động điền số tiền & nội dung",
+                      icon: QrCode,
+                      badge: "Khuyên dùng",
+                    },
+                    {
+                      value: "manual" as PaymentMethod,
+                      label: "Chuyển khoản thủ công",
+                      desc: "Xem thông tin tài khoản và tự nhập nội dung chuyển khoản",
+                      icon: Banknote,
+                      badge: null,
+                    },
+                    {
+                      value: "cod" as PaymentMethod,
+                      label: "Thanh toán khi nhận hàng (COD)",
+                      desc: "Trả tiền mặt khi nhận hàng, không cần chuyển khoản trước",
+                      icon: Truck,
+                      badge: null,
+                    },
+                  ] as const).map(({ value, label, desc, icon: Icon, badge }) => (
+                    <label
+                      key={value}
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all ${form.payment === value
+                        ? "border-[#8B5E3C] bg-[#8B5E3C]/5 shadow-sm"
+                        : "border-[#d2d2d7] hover:bg-[#f5f5f7]"
+                        }`}
+                    >
+                      <input
+                        type="radio"
+                        name="payment"
+                        value={value}
+                        checked={form.payment === value}
+                        onChange={handleChange}
+                        className="mt-0.5 h-4 w-4 accent-[#8B5E3C]"
+                      />
+                      <Icon
+                        className={`mt-0.5 h-5 w-5 shrink-0 transition-colors ${form.payment === value ? "text-[#8B5E3C]" : "text-[#6e6e73]"
+                          }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium text-[#1d1d1f]">{label}</span>
+                          {badge && (
+                            <span className="rounded-full bg-[#8B5E3C] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                              {badge}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs leading-relaxed text-[#6e6e73]">{desc}</p>
                       </div>
                     </label>
                   ))}
                 </div>
 
-                {form.payment === "bank" && (
-                  <div className="mt-4 rounded-xl bg-[#f5f5f7] p-4">
-                    <p className="text-xs font-semibold text-[#1d1d1f]">Thông tin chuyển khoản:</p>
-                    <div className="mt-2 space-y-1 text-xs text-[#6e6e73]">
-                      <p>Ngân hàng: <span className="font-medium text-[#1d1d1f]">Vietcombank</span></p>
-                      <p>STK: <span className="font-medium text-[#1d1d1f]">1234567890</span></p>
-                      <p>Chủ TK: <span className="font-medium text-[#1d1d1f]">NGUYEN VAN A</span></p>
-                      <p>Nội dung: <span className="font-medium text-[#8B5E3C]">BASEW [SĐT]</span></p>
-                    </div>
+                {/* VietQR info hint */}
+                {form.payment === "vietqr" && (
+                  <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-[#FDF6F0] p-3.5 ring-1 ring-[#8B5E3C]/15">
+                    <QrCode className="mt-0.5 h-4 w-4 shrink-0 text-[#8B5E3C]" />
+                    <p className="text-xs leading-relaxed text-[#6e6e73]">
+                      Sau khi nhấn <strong className="text-[#1d1d1f]">Đặt hàng</strong>, mã QR sẽ hiện ra với{" "}
+                      <strong className="text-[#1d1d1f]">số tiền và nội dung chuyển khoản tự động</strong>.{" "}
+                      Quét bằng bất kỳ App Ngân hàng hoặc MoMo.
+                    </p>
+                  </div>
+                )}
+
+                {/* COD note */}
+                {form.payment === "cod" && (
+                  <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-[#f5f5f7] p-3.5">
+                    <Truck className="mt-0.5 h-4 w-4 shrink-0 text-[#6e6e73]" />
+                    <p className="text-xs leading-relaxed text-[#6e6e73]">
+                      Bạn chỉ cần chuẩn bị{" "}
+                      <strong className="text-[#1d1d1f]">{formatPrice(grandTotal)}</strong>{" "}
+                      khi nhận hàng. Shipper sẽ liên hệ trước khi giao.
+                    </p>
                   </div>
                 )}
               </div>
@@ -386,7 +565,14 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               {/* Submit - mobile */}
               <button type="submit" disabled={status === "sending"}
                 className="h-12 w-full rounded-full bg-[#8B5E3C] text-[15px] font-medium text-white transition-all hover:bg-[#6F4A2F] disabled:opacity-60 lg:hidden">
-                {status === "sending" ? "Đang xử lý..." : `Đặt hàng — ${formatPrice(grandTotal)}`}
+                {status === "sending" ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Đang xử lý...
+                  </span>
+                ) : (
+                  `Đặt hàng — ${formatPrice(grandTotal)}`
+                )}
               </button>
             </form>
 
@@ -462,12 +648,31 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                   formEl?.requestSubmit();
                 }}
                 className="mt-6 hidden h-12 w-full rounded-full bg-[#8B5E3C] text-[15px] font-medium text-white transition-all hover:bg-[#6F4A2F] disabled:opacity-60 lg:inline-flex lg:items-center lg:justify-center">
-                {status === "sending" ? "Đang xử lý..." : `Đặt hàng — ${formatPrice(grandTotal)}`}
+                {status === "sending" ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Đang xử lý...
+                  </span>
+                ) : (
+                  `Đặt hàng — ${formatPrice(grandTotal)}`
+                )}
               </button>
             </div>
           </div>
         </div>
       )}
+      {/* Payment QR modal */}
+      <PaymentQRModal
+        isOpen={showQR}
+        paymentMethod={form.payment}
+        amount={grandTotal}
+        phone={form.phone}
+        name={form.name}
+        address={fullAddress || detailAddress || "—"}
+        orderId={orderId}
+        onClose={() => setShowQR(false)}
+        onConfirm={handlePaymentConfirmed}
+      />
     </div>
   );
 };

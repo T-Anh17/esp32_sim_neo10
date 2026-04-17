@@ -81,5 +81,17 @@ declare namespace NodeJS {
     VITE_GA_MEASUREMENT_ID?: string;
     VITE_META_PIXEL_ID?: string;
     VITE_ENABLE_ANALYTICS?: string;
-  }
+    /** VietQR — Mã ngân hàng BIN (VD: 970436 = Vietcombank) */
+    VITE_PAYMENT_BANK_BIN?: string;
+    /** VietQR — Số tài khoản nhận tiền */
+    VITE_PAYMENT_ACCOUNT_NO?: string;
+    /** VietQR — Tên chủ tài khoản */
+    VITE_PAYMENT_ACCOUNT_NAME?: string;
+    /** VietQR — Tên ngân hàng hiển thị (VD: Vietcombank) */
+    VITE_PAYMENT_BANK_NAME?: string;
+    /** Số điện thoại MoMo nhận tiền */
+    VITE_PAYMENT_MOMO_PHONE?: string;
+    /** Prefix trong nội dung CK (VD: BASEW) */
+    VITE_PAYMENT_COMPANY_PREFIX?: string;
+    }
 }
