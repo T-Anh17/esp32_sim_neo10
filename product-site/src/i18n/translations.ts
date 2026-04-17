@@ -5,7 +5,7 @@ export const translations = {
     tagline: "Thiết bị cảnh báo khẩn cấp thông minh",
     nav: {
       device: "Thiết bị",
-      demo: "Demo",
+      experience: "Trải nghiệm",
       pricing: "Đặt hàng",
       contact: "Liên hệ",
       orderCta: "Đặt hàng ngay",
@@ -21,7 +21,7 @@ export const translations = {
         "Theo dõi qua web",
         "Không cần cài app",
       ],
-      ctaDemo: "Xem demo",
+      ctaExperience: "Trải nghiệm ngay",
       ctaOrder: "Liên hệ ngay",
     },
     overview: {
@@ -64,20 +64,31 @@ export const translations = {
         "Theo dõi thời gian thực",
         "Vùng an toàn",
       ],
-      processHeading: "Quá trình phát triển thực tế",
-      processDesc: "Hình ảnh thử nghiệm và hoàn thiện sản phẩm giúp bạn thấy BA.SEW là thiết bị đã được làm thật, không chỉ là ý tưởng.",
+      processHeading: "Quá trình phát triển",
+      processDesc:
+        "BA.SEW được nghiên cứu và chế tạo thực tế, trải qua nhiều khâu thử nghiệm nghiêm ngặt để đảm bảo độ tin cậy trong mọi tình huống khẩn cấp.",
     },
-    demo: {
-      heading: "Video hướng dẫn + Web tracking demo",
-      desc: "Xem cách BA.SEW hoạt động thực tế và cách người thân theo dõi vị trí trực tiếp trên web.",
-      videoTitle: "Xem cách BA.SEW hoạt động trong thực tế",
-      videoDesc: "Sẵn sàng thay bằng YouTube embed, video file hoặc Facebook video.",
-      videoPlaceholderTitle: "Sẵn sàng gắn video hướng dẫn",
-      videoPlaceholderDesc: "Thêm link video để hiển thị hướng dẫn sử dụng thực tế.",
+    experience: {
+      heading: "Trải nghiệm thực tế",
+      desc: "Khám phá cách BA.SEW bảo vệ người thân của bạn trong các tình huống khẩn cấp và trải nghiệm hệ thống theo dõi trực tuyến.",
+      videoTitle: "Video hướng dẫn hoạt động",
+      videoDesc:
+        "Xem chi tiết cách thiết bị BA.SEW vận hành và kết nối an toàn với hệ thống cảnh báo của gia đình.",
+      videoPlaceholderTitle: "Sắp ra mắt: Video trải nghiệm BA.SEW",
+      videoPlaceholderDesc:
+        "Chúng tôi đang ghi hình và hoàn thiện video mô phỏng thực tế. Vui lòng quay lại sau để hiểu rõ hơn về sản phẩm.",
       videoCta: "Xem video hướng dẫn",
-      trackingTitle: "Demo theo dõi trên web",
-      trackingDesc: "Người thân có thể theo dõi vị trí thiết bị trực tiếp trên nền tảng web.",
-      trackingCta: "Xem demo theo dõi",
+      trackingTitle: "Theo dõi vị trí thiết bị",
+      trackingDesc:
+        "Người thân có thể theo dõi vị trí thiết bị trực tiếp qua nền tảng web bảo mật của chúng tôi.",
+      trackingCta: "Khám phá nền tảng",
+      trackingHighlights: [
+        "Bản đồ trực tiếp, tương thích mọi thiết bị",
+        "Xem lại lịch sử di chuyển chi tiết",
+        "Thiết lập vùng an toàn (HOME) và nhận cảnh báo",
+        "Hệ thống định vị thời gian thực ổn định",
+      ],
+      trackingNote: "Hệ thống bản đồ theo dõi sẽ được mở ở tab mới để tối ưu không gian trải nghiệm.",
     },
     pricingOrder: {
       heading: "Đặt mua BA.SEW",
@@ -185,7 +196,7 @@ export const translations = {
     tagline: "Smart emergency warning device",
     nav: {
       device: "Device",
-      demo: "Demo",
+      experience: "Experience",
       pricing: "Order",
       contact: "Contact",
       orderCta: "Order now",
@@ -195,13 +206,8 @@ export const translations = {
       sub: "With one button press, BA.SEW sends alerts, places calls, and shares location for fast family support.",
       priceLabel: "Only",
       priceValue: "400,000 VND / device",
-      bullets: [
-        "Fast SOS",
-        "Realtime GPS",
-        "Web tracking",
-        "No app needed",
-      ],
-      ctaDemo: "View demo",
+      bullets: ["Fast SOS", "Realtime GPS", "Web tracking", "No app needed"],
+      ctaExperience: "Experience now",
       ctaOrder: "Contact now",
     },
     overview: {
@@ -244,20 +250,31 @@ export const translations = {
         "Realtime monitoring",
         "Safe-zone alerts",
       ],
-      processHeading: "Real development process",
-      processDesc: "Prototype and build photos make BA.SEW feel like a real product, not just an idea.",
+      processHeading: "Development Process",
+      processDesc:
+        "BA.SEW is thoroughly researched and built, undergoing rigorous testing to ensure reliability in any emergency situation.",
     },
-    demo: {
-      heading: "Guide video + Web tracking demo",
-      desc: "See how BA.SEW works in real life and how family members can track the device location in browser.",
-      videoTitle: "See BA.SEW in real-life use",
-      videoDesc: "Ready for YouTube embed, video file, or Facebook video.",
-      videoPlaceholderTitle: "Ready for guide video",
-      videoPlaceholderDesc: "Add a video link to show practical usage.",
-      videoCta: "Watch guide video",
-      trackingTitle: "Web tracking demo",
-      trackingDesc: "Family members can follow the device location live on web.",
-      trackingCta: "View tracking demo",
+    experience: {
+      heading: "Experience BA.SEW",
+      desc: "Discover how BA.SEW protects your loved ones in emergencies and experience our live tracking platform.",
+      videoTitle: "Product Experience Video",
+      videoDesc:
+        "Watch a detailed walkthrough of how the BA.SEW device operates and securely connects to your family's alert system.",
+      videoPlaceholderTitle: "Coming Soon: BA.SEW Experience Video",
+      videoPlaceholderDesc:
+        "We are currently finalizing our product video. Please check back later to see the product in action.",
+      videoCta: "Watch video guide",
+      trackingTitle: "Web tracking platform",
+      trackingDesc:
+        "Family members can monitor the device's location securely live on our web platform.",
+      trackingCta: "Try platform",
+      trackingHighlights: [
+        "Live mapping, compatible across all devices",
+        "Review detailed movement history",
+        "Set safe zones (HOME) and receive alerts",
+        "Stable real-time positioning system",
+      ],
+      trackingNote: "The tracking map system will open in a new tab for an optimal viewing experience.",
     },
     pricingOrder: {
       heading: "Order BA.SEW",
@@ -319,7 +336,8 @@ export const translations = {
     order: {
       heading: "Request consultation",
       sub: "Leave your details for setup and deployment advice.",
-      privacy: "Your information is used only for BA.SEW consultation and ordering.",
+      privacy:
+        "Your information is used only for BA.SEW consultation and ordering.",
       name: "Full name",
       phone: "Phone number",
       email: "Email",

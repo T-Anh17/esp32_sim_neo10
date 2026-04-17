@@ -197,10 +197,10 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f5f5f7]">
       {/* Top bar */}
-      <div className="sticky top-0 z-10 border-b border-[#d2d2d7]/40 bg-white/80 backdrop-blur-2xl">
-        <div className="container flex h-12 items-center justify-between">
+      <div className="sticky top-0 z-10 border-b border-[#f5f5f7] bg-white/80 backdrop-blur-2xl">
+        <div className="container flex h-14 items-center justify-between">
           <button type="button" onClick={handleBackToShop}
-            className="inline-flex items-center gap-1.5 text-sm text-[#8B5E3C] hover:underline">
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[#0066cc] hover:text-[#005bb5]">
             <ArrowLeft className="h-4 w-4" />
             Tiếp tục mua hàng
           </button>
@@ -236,7 +236,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               Mã đơn hàng: <span className="font-bold text-[#1d1d1f]">{orderId || "N/A"}</span>
             </p>
             <button type="button" onClick={() => { resetForm(); handleBackToShop(); }}
-              className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-[#8B5E3C] px-6 text-sm font-medium text-white hover:bg-[#6F4A2F]">
+              className="mt-6 inline-flex h-12 px-8 items-center justify-center gap-2 rounded-full bg-[#1d1d1f] text-[15px] font-medium text-white transition-all hover:bg-[#3a3a3c] hover:scale-105 active:scale-[0.98]">
               Về trang chủ
             </button>
           </div>
@@ -247,7 +247,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
             <h2 className="text-xl font-semibold text-[#1d1d1f]">Giỏ hàng trống</h2>
             <p className="mt-2 text-sm text-[#6e6e73]">Hãy thêm sản phẩm BA.SEW vào giỏ hàng.</p>
             <button type="button" onClick={handleBackToShop}
-              className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-[#8B5E3C] px-6 text-sm font-medium text-white hover:bg-[#6F4A2F]">
+              className="mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#1d1d1f] px-8 text-[15px] font-medium text-white transition-all hover:bg-[#3a3a3c] hover:scale-105 active:scale-[0.98]">
               <ArrowLeft className="h-4 w-4" />
               Quay lại mua hàng
             </button>
@@ -263,11 +263,11 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               { icon: Check, label: "Xác nhận", active: false },
             ].map(({ icon: Icon, label, active }, i) => (
               <div key={label} className="flex items-center gap-2">
-                {i > 0 && <div className={`h-px w-8 ${active ? "bg-[#8B5E3C]" : "bg-[#d2d2d7]"}`} />}
-                <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${active ? "bg-[#8B5E3C] text-white" : "bg-[#d2d2d7] text-[#6e6e73]"}`}>
+                {i > 0 && <div className={`h-px w-8 ${active ? "bg-[#1d1d1f]" : "bg-[#d2d2d7]"}`} />}
+                <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${active ? "bg-[#1d1d1f] text-white" : "bg-[#f5f5f7] text-[#86868b]"}`}>
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className={`text-xs font-medium ${active ? "text-[#1d1d1f]" : "text-[#6e6e73]"}`}>{label}</span>
+                <span className={`text-[13px] font-semibold tracking-wide ${active ? "text-[#1d1d1f]" : "text-[#86868b]"}`}>{label}</span>
               </div>
             ))}
           </div>
@@ -290,12 +290,12 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
             {/* Left - Form */}
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Customer info */}
-              <div className="rounded-3xl bg-white p-6 shadow-sm sm:p-8">
-                <div className="mb-5 flex items-center gap-3">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#8B5E3C]/10 text-[#8B5E3C]">
-                    <User className="h-4 w-4" />
+              <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8 apple-shadow">
+                <div className="mb-6 flex items-center gap-3">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f5f5f7] text-[#1d1d1f]">
+                    <User className="h-5 w-5" />
                   </span>
-                  <h3 className="text-base font-semibold text-[#1d1d1f]">Thông tin người nhận</h3>
+                  <h3 className="text-lg font-semibold text-[#1d1d1f]">Thông tin người nhận</h3>
                 </div>
                 <div className="space-y-4">
                   <div>
@@ -322,12 +322,12 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Shipping address */}
-              <div className="rounded-3xl bg-white p-6 shadow-sm sm:p-8">
-                <div className="mb-5 flex items-center gap-3">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#8B5E3C]/10 text-[#8B5E3C]">
-                    <MapPin className="h-4 w-4" />
+              <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8 apple-shadow">
+                <div className="mb-6 flex items-center gap-3">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f5f5f7] text-[#1d1d1f]">
+                    <MapPin className="h-5 w-5" />
                   </span>
-                  <h3 className="text-base font-semibold text-[#1d1d1f]">Địa chỉ giao hàng</h3>
+                  <h3 className="text-lg font-semibold text-[#1d1d1f]">Địa chỉ giao hàng</h3>
                 </div>
 
                 {/* ── 3-level address cascade ── */}
@@ -476,12 +476,12 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Payment method */}
-              <div className="rounded-3xl bg-white p-6 shadow-sm sm:p-8">
-                <div className="mb-5 flex items-center gap-3">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#8B5E3C]/10 text-[#8B5E3C]">
-                    <CreditCard className="h-4 w-4" />
+              <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8 apple-shadow">
+                <div className="mb-6 flex items-center gap-3">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f5f5f7] text-[#1d1d1f]">
+                    <CreditCard className="h-5 w-5" />
                   </span>
-                  <h3 className="text-base font-semibold text-[#1d1d1f]">Phương thức thanh toán</h3>
+                  <h3 className="text-lg font-semibold text-[#1d1d1f]">Phương thức thanh toán</h3>
                 </div>
 
                 <div className="space-y-3">
@@ -510,9 +510,9 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                   ] as const).map(({ value, label, desc, icon: Icon, badge }) => (
                     <label
                       key={value}
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all ${form.payment === value
-                        ? "border-[#8B5E3C] bg-[#8B5E3C]/5 shadow-sm"
-                        : "border-[#d2d2d7] hover:bg-[#f5f5f7]"
+                      className={`flex cursor-pointer items-start gap-4 rounded-2xl border-2 p-5 transition-all ${form.payment === value
+                        ? "border-[#0066cc] bg-[#0066cc]/5"
+                        : "border-[#f5f5f7] hover:border-[#d2d2d7]"
                         }`}
                     >
                       <input
@@ -521,10 +521,10 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                         value={value}
                         checked={form.payment === value}
                         onChange={handleChange}
-                        className="mt-0.5 h-4 w-4 accent-[#8B5E3C]"
+                        className="mt-0.5 h-4 w-4 accent-[#0066cc]"
                       />
                       <Icon
-                        className={`mt-0.5 h-5 w-5 shrink-0 transition-colors ${form.payment === value ? "text-[#8B5E3C]" : "text-[#6e6e73]"
+                        className={`mt-0.5 h-5 w-5 shrink-0 transition-colors ${form.payment === value ? "text-[#0066cc]" : "text-[#86868b]"
                           }`}
                       />
                       <div className="min-w-0 flex-1">
@@ -569,7 +569,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
 
               {/* Submit - mobile */}
               <button type="submit" disabled={status === "sending"}
-                className="h-12 w-full rounded-full bg-[#8B5E3C] text-[15px] font-medium text-white transition-all hover:bg-[#6F4A2F] disabled:opacity-60 lg:hidden">
+                className="h-12 w-full rounded-full bg-[#0066cc] text-[15px] font-semibold text-white transition-all hover:bg-[#005bb5] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 lg:hidden focus:ring-4 focus:ring-[#0066cc]/20 outline-none">
                 {status === "sending" ? (
                   <span className="inline-flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -652,7 +652,7 @@ const CheckoutSection: FC<CheckoutSectionProps> = ({ isOpen, onClose }) => {
                   const formEl = document.querySelector("form") as HTMLFormElement;
                   formEl?.requestSubmit();
                 }}
-                className="mt-6 hidden h-12 w-full rounded-full bg-[#8B5E3C] text-[15px] font-medium text-white transition-all hover:bg-[#6F4A2F] disabled:opacity-60 lg:inline-flex lg:items-center lg:justify-center">
+                className="mt-8 hidden h-12 w-full rounded-full bg-[#0066cc] text-[15px] font-semibold text-white transition-all hover:bg-[#005bb5] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 lg:inline-flex lg:items-center lg:justify-center focus:ring-4 focus:ring-[#0066cc]/20 outline-none">
                 {status === "sending" ? (
                   <span className="inline-flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />

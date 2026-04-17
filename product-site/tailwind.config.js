@@ -11,8 +11,8 @@ module.exports = {
     },
     extend: {
       fontFamily: {
-        sans: ["Inter", "SF Pro Display", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
-        display: ["Inter", "SF Pro Display", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", "Roboto", "sans-serif"],
+        display: ["-apple-system", "BlinkMacSystemFont", "SF Pro Display", "Inter", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -62,13 +62,13 @@ module.exports = {
           "muted-hover": "#A67D55",
         },
         apple: {
-          blue: "#8B5E3C",
-          "blue-hover": "#6F4A2F",
+          blue: "#0066cc",
+          "blue-hover": "#005bb5",
           black: "#1d1d1f",
           gray: "#6e6e73",
           "gray-light": "#f5f5f7",
           "gray-border": "#d2d2d7",
-          link: "#8B5E3C",
+          link: "#0066cc",
         },
       },
       borderRadius: {
@@ -76,11 +76,13 @@ module.exports = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
         apple: "980px",
+        "3xl": "1.5rem",
+        "4xl": "2rem",
       },
       fontSize: {
-        "hero-xl": ["clamp(2.5rem, 6vw, 4rem)", { lineHeight: "1.05", letterSpacing: "-0.025em", fontWeight: "700" }],
-        "section-title": ["clamp(1.8rem, 4vw, 3rem)", { lineHeight: "1.08", letterSpacing: "-0.02em", fontWeight: "700" }],
-        "card-title": ["1.25rem", { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "600" }],
+        "hero-xl": ["clamp(3rem, 8vw, 5.5rem)", { lineHeight: "1.05", letterSpacing: "-0.035em", fontWeight: "700" }],
+        "section-title": ["clamp(2rem, 5vw, 3.5rem)", { lineHeight: "1.08", letterSpacing: "-0.025em", fontWeight: "700" }],
+        "card-title": ["1.5rem", { lineHeight: "1.2", letterSpacing: "-0.015em", fontWeight: "600" }],
       },
       keyframes: {
         "accordion-down": {

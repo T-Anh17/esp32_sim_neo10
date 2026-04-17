@@ -1,4 +1,4 @@
-﻿import { useState, type FC } from "react";
+import { useState, type FC } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight, BellRing, MapPinned, PhoneCall, ShieldCheck } from "lucide-react";
 import { useI18n } from "@/i18n/context";
@@ -73,47 +73,44 @@ const HeroSection: FC = () => {
       {/* ── Hero text ── */}
       <div
         ref={headRef}
-        className={`container py-16 text-center sm:py-24 reveal${headVisible ? " is-visible" : ""
+        className={`container py-24 text-center lg:py-32 reveal${headVisible ? " is-visible" : ""
           }`}
       >
         {/* Brand pill */}
-        <span className="inline-flex items-center gap-2 rounded-full bg-[#FDF6F0] px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-[#8B5E3C] ring-1 ring-[#8B5E3C]/20">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#8B5E3C] sos-pulse" />
+        <span className="inline-flex items-center gap-2 rounded-full bg-[#f5f5f7] px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-[#1d1d1f] transition-all hover:bg-[#e8e8ed]">
           BA.SEW — Thiết bị khẩn cấp
         </span>
 
-        <h1 className="mx-auto mt-5 max-w-3xl text-hero-xl text-[#1d1d1f]">
+        <h1 className="mx-auto mt-6 max-w-4xl text-hero-xl text-[#1d1d1f]">
           <span className="block">BA.SEW</span>
-          <span className="mt-2 block text-[clamp(1.2rem,3vw,1.7rem)] font-medium leading-snug text-[#6e6e73]">
+          <span className="mt-2 block text-[clamp(1.5rem,3.5vw,2.2rem)] font-semibold leading-snug text-[#86868b]">
             {t.hero.headline}
           </span>
         </h1>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <a
-            href="#demo"
-            onClick={() => trackCTA("hero_demo", "hero")}
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-[#8B5E3C] px-7 text-[15px] font-medium text-white shadow-sm transition-all hover:bg-[#6F4A2F] hover:shadow-md active:scale-[0.97]"
+            href="#experience"
+            onClick={() => trackCTA("hero_experience", "hero")}
+            className="inline-flex h-12 items-center gap-2 rounded-full bg-[#1d1d1f] px-8 text-[15px] font-medium text-white transition-all hover:scale-105 hover:bg-[#3a3a3c]"
           >
-            {t.hero.ctaDemo}
+            {t.hero.ctaExperience}
             <ArrowRight className="h-4 w-4" />
           </a>
           <a
             href="#contact"
             onClick={() => trackCTA("hero_contact", "hero")}
-            className="inline-flex h-11 items-center rounded-full border-2 border-[#8B5E3C] px-7 text-[15px] font-medium text-[#8B5E3C] transition-all hover:bg-[#8B5E3C] hover:text-white active:scale-[0.97]"
+            className="inline-flex h-12 items-center rounded-full bg-[#f5f5f7] px-8 text-[15px] font-medium text-[#1d1d1f] transition-all hover:scale-105 hover:bg-[#e8e8ed]"
           >
             {t.hero.ctaOrder}
           </a>
         </div>
 
-        {/* Quick trust badges */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-[#6e6e73]">
-          <span>✅ Đã triển khai thực tế</span>
+        {/* Quick trust badges - simplified */}
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-[#86868b]">
+          <span>Giao hàng toàn quốc</span>
           <span className="hidden sm:inline text-[#d2d2d7]">|</span>
-          <span>📦 Giao hàng toàn quốc</span>
-          <span className="hidden sm:inline text-[#d2d2d7]">|</span>
-          <span>🔒 Bảo hành 12 tháng</span>
+          <span>Bảo hành 12 tháng</span>
         </div>
       </div>
 
@@ -123,16 +120,16 @@ const HeroSection: FC = () => {
         className={`relative mx-auto max-w-5xl px-4 reveal reveal-scale${imgVisible ? " is-visible" : ""
           }`}
       >
-        <div className="relative overflow-hidden rounded-t-3xl bg-[#f5f5f7]">
+        <div className="relative overflow-hidden rounded-t-[2.5rem] bg-[#f5f5f7]">
           <img
             src={productMain}
             alt="Thiết bị BA.SEW"
-            className="mx-auto h-[320px] w-full object-cover sm:h-[440px] lg:h-[520px]"
+            className="mx-auto h-[360px] w-full object-cover sm:h-[500px] lg:h-[600px]"
           />
-          {/* SOS overlay badge */}
-          <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur-sm">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#8B5E3C] sos-pulse" />
-            <span className="text-xs font-semibold text-[#1d1d1f]">SOS Ready</span>
+          {/* SOS overlay badge - refined */}
+          <div className="absolute left-6 top-6 flex items-center gap-3 rounded-full bg-white/60 px-4 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.06)] backdrop-blur-xl">
+            <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+            <span className="text-xs font-semibold tracking-wide text-[#1d1d1f]">SOS Ready</span>
           </div>
         </div>
       </div>
@@ -192,21 +189,21 @@ const HeroSection: FC = () => {
                     key={label}
                     type="button"
                     onClick={() => setActiveTab(isActive ? null : idx)}
-                    className={`flex flex-col items-center gap-2.5 rounded-2xl p-5 text-center transition-all duration-200 ${isActive
-                      ? "bg-[#8B5E3C] text-white shadow-md scale-[1.04]"
-                      : "bg-white text-[#1d1d1f] hover:shadow-md hover:scale-[1.02]"
+                    className={`flex flex-col items-center gap-3 rounded-[1.5rem] p-6 text-center transition-all duration-300 apple-shadow-hover ${isActive
+                      ? "bg-[#1d1d1f] text-white shadow-xl scale-[1.02]"
+                      : "bg-white text-[#1d1d1f] apple-shadow"
                       }`}
                   >
                     <span
-                      className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors ${isActive ? "bg-white/20" : "bg-[#f5f5f7]"
+                      className={`inline-flex h-12 w-12 items-center justify-center rounded-full transition-colors ${isActive ? "bg-white/10" : "bg-[#f5f5f7]"
                         }`}
                     >
                       <Icon
-                        className={`h-5 w-5 ${isActive ? "text-white" : "text-[#8B5E3C]"
+                        className={`h-6 w-6 ${isActive ? "text-white" : "text-[#1d1d1f]"
                           }`}
                       />
                     </span>
-                    <span className="text-sm font-medium">{label}</span>
+                    <span className="text-sm font-semibold">{label}</span>
                   </button>
                 );
               })}

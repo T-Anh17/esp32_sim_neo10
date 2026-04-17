@@ -9,10 +9,10 @@ const BrandLogo: FC<BrandLogoProps> = ({ className, compact = false, showSubtitl
       <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg">
         <img src={logo} alt="Logo BA.SEW" className="h-full w-full object-contain" />
       </span>
-      <div className={cn("min-w-0", compact && "space-y-0")}>
-        <p className="font-display text-[17px] font-semibold leading-none tracking-tight text-[#1d1d1f]">BA.SEW</p>
+      <div className={cn("min-w-0 flex flex-col justify-center", compact && "space-y-0")}>
+        <p className="text-[17px] font-bold tracking-tight text-[#1d1d1f] leading-none">BA.SEW</p>
         {showSubtitle && (
-          <p className="truncate text-[10px] font-medium uppercase tracking-[0.08em] text-[#86868b]">
+          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[#86868b] mt-0.5">
             Smart Emergency Warning
           </p>
         )}

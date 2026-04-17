@@ -67,15 +67,15 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     font-feature-settings: "cv11", "ss01";
     background: #ffffff;
     min-height: 100vh;
   }
 
   ::selection {
-    background: rgba(139, 94, 60, 0.18);
-    color: #1d1d1f;
+    background: rgba(0, 102, 204, 0.2);
+    color: inherit;
   }
 }
 
@@ -91,18 +91,17 @@
 /* ── Scroll-reveal helpers ──────────────────────────────────────────────── */
 .reveal {
   opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.65s cubic-bezier(0.22,1,0.36,1),
-              transform 0.65s cubic-bezier(0.22,1,0.36,1);
+  transform: translateY(30px);
+  transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1), transform 1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .reveal.reveal-left {
-  transform: translateX(-28px);
+  transform: translateX(-30px);
 }
 .reveal.reveal-right {
-  transform: translateX(28px);
+  transform: translateX(30px);
 }
 .reveal.reveal-scale {
-  transform: scale(0.95);
+  transform: scale(0.97) translateY(20px);
 }
 .reveal.is-visible {
   opacity: 1;
@@ -112,26 +111,26 @@
 /* Staggered children inside a revealed container */
 .reveal-group > * {
   opacity: 0;
-  transform: translateY(18px);
-  transition: opacity 0.55s cubic-bezier(0.22,1,0.36,1),
-              transform 0.55s cubic-bezier(0.22,1,0.36,1);
+  transform: translateY(20px);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.reveal-group.is-visible > *:nth-child(1) { opacity:1; transform:none; transition-delay:0ms; }
-.reveal-group.is-visible > *:nth-child(2) { opacity:1; transform:none; transition-delay:80ms; }
-.reveal-group.is-visible > *:nth-child(3) { opacity:1; transform:none; transition-delay:160ms; }
-.reveal-group.is-visible > *:nth-child(4) { opacity:1; transform:none; transition-delay:240ms; }
-.reveal-group.is-visible > *:nth-child(5) { opacity:1; transform:none; transition-delay:320ms; }
-.reveal-group.is-visible > *:nth-child(6) { opacity:1; transform:none; transition-delay:400ms; }
+.reveal-group.is-visible > *:nth-child(1) { opacity:1; transform:none; transition-delay:100ms; }
+.reveal-group.is-visible > *:nth-child(2) { opacity:1; transform:none; transition-delay:200ms; }
+.reveal-group.is-visible > *:nth-child(3) { opacity:1; transform:none; transition-delay:300ms; }
+.reveal-group.is-visible > *:nth-child(4) { opacity:1; transform:none; transition-delay:400ms; }
+.reveal-group.is-visible > *:nth-child(5) { opacity:1; transform:none; transition-delay:500ms; }
+.reveal-group.is-visible > *:nth-child(6) { opacity:1; transform:none; transition-delay:600ms; }
 
-/* SOS pulse ring */
-.sos-pulse {
-  box-shadow: 0 0 0 0 rgba(139,94,60,0.4);
-  animation: pulse-ring 2s ease-in-out infinite;
+/* Sublte shadow for premium feel */
+.apple-shadow {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
 }
-
-@keyframes pulse-ring {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(139,94,60,0.4); }
-  60%       { box-shadow: 0 0 0 12px rgba(139,94,60,0); }
+.apple-shadow-hover {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.apple-shadow-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 /* Cart dropdown animation */
